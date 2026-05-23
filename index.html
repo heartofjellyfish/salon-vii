@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Salon VII — Salle I</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+/* ── RESET ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#080c09;font-family:'Cormorant Garamond',serif;color:#c9a98d}
+canvas{display:block}
+
+/* ── LOADING SCREEN ── */
+#loader{position:fixed;inset:0;z-index:1000;background:#080c09;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity 0.8s ease-out}
+#loader.hidden{opacity:0;pointer-events:none}
+.loader-title{font-size:clamp(28px,5vw,48px);font-weight:300;letter-spacing:0.35em;color:#c9a84c;margin-bottom:12px}
+.loader-subtitle{font-size:clamp(12px,1.8vw,16px);font-weight:300;font-style:italic;color:#8a7a5a;margin-bottom:48px}
+.loader-bar{width:clamp(160px,30vw,280px);height:1px;background:rgba(201,168,76,0.15);position:relative}
+.loader-progress{position:absolute;top:0;left:0;height:100%;width:0%;background:#c9a84c;transition:width 0.3s ease}
+
+/* ── DOOR SCENE ── */
+#door-scene{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center, #1a2818 0%, #0a1208 70%);cursor:pointer;transition:opacity 0.8s ease-out}
+#door-scene.fade-out{opacity:0;pointer-events:none}
+
+.door-stage{perspective:1200px;width:100%;height:100%;display:flex;align-items:center;justify-content:center;position:relative}
+
+/* Corridor walls with wallpaper pattern */
+.corridor{position:absolute;inset:0}
+.corridor::before{content:'';position:absolute;inset:0;background:
+  repeating-linear-gradient(0deg,transparent,transparent 4px,rgba(0,0,0,0.03) 4px,rgba(0,0,0,0.03) 5px),
+  radial-gradient(ellipse at 30% 40%, rgba(50,80,40,0.3) 0%, transparent 50%),
+  radial-gradient(ellipse at 70% 60%, rgba(50,80,40,0.2) 0%, transparent 50%),
+  linear-gradient(180deg,#0e1a0c 0%,#162612 50%,#0e1a0c 100%)}
+
+/* Shoes on floor */
+.shoes{position:absolute;bottom:14%;right:28%;width:60px;height:30px}
+.shoe{position:absolute;bottom:0;width:40px;height:14px;background:linear-gradient(180deg,#3a2010,#2a1508);border-radius:20px 20px 6px 6px;transform:rotate(-8deg)}
+.shoe+.shoe{left:28px;transform:rotate(5deg);width:36px}
+
+/* Coat hook + jacket */
+.coat-hook{position:absolute;top:16%;right:24%;width:50px;height:80px}
+.hook{position:absolute;top:0;left:50%;transform:translateX(-50%);width:14px;height:14px;background:#7a6a4a;border-radius:50%;box-shadow:0 1px 2px rgba(0,0,0,0.4)}
+.jacket{position:absolute;top:10px;left:-6px;width:44px;height:60px;background:linear-gradient(180deg,#4a3020,#3a2018);border-radius:14px 14px 8px 8px;box-shadow:2px 2px 4px rgba(0,0,0,0.3)}
+.jacket::after{content:'';position:absolute;top:16px;left:4px;width:16px;height:28px;background:linear-gradient(135deg,#5a4030,#4a3020);border-radius:4px;transform:rotate(-12deg)}
+
+/* Card pinned beside door */
+.door-card{position:absolute;left:calc(50% + 100px);top:38%;transform:translateY(-50%);background:rgba(30,20,12,0.85);border:1px solid rgba(180,140,100,0.3);padding:10px 14px;max-width:160px;font-size:11px;font-weight:300;line-height:1.5;color:#b8a080;backdrop-filter:blur(4px);opacity:0.85}
+.door-card .card-title{font-size:10px;font-weight:500;letter-spacing:0.15em;color:#c9a84c;margin-bottom:4px}
+.door-card .card-sub{font-size:9px;font-style:italic;color:#9a8a6a}
+
+/* Pin mark */
+.door-card::before{content:'';position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:6px;height:6px;background:radial-gradient(circle,#c9a84c,#7a5a2a);border-radius:50%;box-shadow:0 0 4px rgba(201,168,76,0.3)}
+
+/* Door container */
+.door-wrap{position:relative;width:240px;height:380px;transform-style:preserve-3d;transition:transform 0.9s cubic-bezier(0.25,0.1,0.25,1);transform-origin:left center;z-index:10}
+.door-wrap.open{transform:rotateY(-105deg)}
+
+.door-face{position:absolute;inset:0;background:linear-gradient(180deg,#5a3a28 0%,#4a2a18 30%,#3a2010 60%,#2a1808 100%);border-radius:6px 6px 0 0;box-shadow:inset 2px 0 6px rgba(0,0,0,0.3),4px 4px 16px rgba(0,0,0,0.5)}
+/* Door panels */
+.door-face::before{content:'';position:absolute;inset:20px;border:2px solid rgba(0,0,0,0.15);border-radius:4px}
+.door-face::after{content:'';position:absolute;top:50%;left:20px;right:20px;height:2px;background:rgba(0,0,0,0.12)}
+
+/* Door panels detail */
+.door-panel{position:absolute;left:28px;right:28px;border:1px solid rgba(0,0,0,0.1);border-radius:3px;background:rgba(0,0,0,0.04)}
+.door-panel.top{top:26px;bottom:52%}
+.door-panel.bottom{top:52%;bottom:26px}
+
+/* Brass nameplate */
+.nameplate{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);width:130px;background:linear-gradient(135deg,#c9a84c,#a0802a,#c9a84c);border-radius:3px;padding:6px 10px;text-align:center;box-shadow:0 0 8px rgba(201,168,76,0.3),inset 0 0 2px rgba(255,255,220,0.3)}
+.nameplate span{font-size:15px;font-weight:500;letter-spacing:0.35em;color:#2a1a08;line-height:1}
+
+/* Brass knob */
+.knob{position:absolute;right:16px;top:53%;width:18px;height:34px;transform:translateY(-50%);background:linear-gradient(135deg,#d4b060,#a0802a,#d4b060);border-radius:50%/40%;box-shadow:0 0 8px rgba(201,168,76,0.3),inset -1px -1px 3px rgba(0,0,0,0.3),inset 1px 1px 3px rgba(255,255,200,0.3);transition:filter 0.3s ease}
+.door-wrap:hover .knob,.door-wrap:hover .nameplate{filter:brightness(1.2)}
+
+/* Light leak under door */
+.door-light{position:absolute;bottom:-6px;left:12px;right:12px;height:4px;background:linear-gradient(90deg,transparent,rgba(255,208,96,0.6),rgba(255,180,40,0.7),rgba(255,208,96,0.6),transparent);border-radius:2px;box-shadow:0 -2px 12px rgba(255,180,40,0.4),0 -1px 24px rgba(255,160,40,0.2);animation:flicker 3s ease-in-out infinite}
+
+@keyframes flicker{0%,100%{opacity:0.8}50%{opacity:1}30%{opacity:0.7}70%{opacity:0.9}}
+
+/* Click hint */
+.door-hint{position:absolute;bottom:22%;left:50%;transform:translateX(-50%);font-size:12px;font-weight:300;font-style:italic;color:rgba(201,168,76,0.5);animation:pulse-hint 2.5s ease-in-out infinite;pointer-events:none}
+@keyframes pulse-hint{0%,100%{opacity:0.3}50%{opacity:0.8}}
+
+/* ── GALLERY SCENE ── */
+#gallery-scene{position:fixed;inset:0;z-index:50;opacity:0;transition:opacity 1.5s ease-out}
+#gallery-scene.visible{opacity:1}
+
+/* ── LIGHTBOX ── */
+#lightbox{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.4s ease}
+#lightbox.active{opacity:1;pointer-events:auto}
+.lb-close{position:absolute;top:24px;right:28px;font-size:32px;color:#c9a84c;cursor:pointer;font-weight:300;line-height:1;transition:opacity 0.2s;z-index:10}
+.lb-close:hover{opacity:0.7}
+.lb-content{display:flex;flex-direction:column;align-items:center;max-width:90vw;max-height:90vh}
+.lb-img{max-width:85vw;max-height:65vh;object-fit:contain;box-shadow:0 0 60px rgba(0,0,0,0.6),0 0 0 1px rgba(201,168,76,0.15)}
+.lb-info{text-align:center;margin-top:24px;max-width:500px}
+.lb-title{font-size:22px;font-weight:400;color:#c9a84c;margin-bottom:4px}
+.lb-artist{font-size:14px;font-weight:300;font-style:italic;color:#8a7a5a;margin-bottom:12px}
+.lb-text{font-size:15px;font-weight:300;line-height:1.6;color:#b8a080;font-style:italic}
+
+/* ── CURATOR PANEL ── */
+#curator-panel{position:fixed;bottom:24px;left:24px;z-index:200;max-width:260px;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-left:1px solid rgba(201,168,76,0.4);padding:16px;font-family:'Cormorant Garamond',serif;color:#c9a98d;opacity:0;transition:opacity 1s ease 3s}
+#curator-panel.visible{opacity:1}
+.curator-toggle{display:none}
+.curator-title{font-size:14px;font-weight:500;letter-spacing:0.15em;color:#c9a84c;margin-bottom:8px}
+.curator-body p{font-size:13px;font-weight:300;line-height:1.6;margin-bottom:6px}
+.curator-body p:last-child{margin-bottom:0}
+.curator-sig{margin-top:8px!important;font-style:italic;color:#8a7a5a;font-size:12px!important}
+
+/* ── MOBILE ── */
+@media(max-width:768px){
+  .door-wrap{width:180px;height:300px}
+  .nameplate{width:100px}
+  .nameplate span{font-size:12px;letter-spacing:0.25em}
+  .knob{right:12px;width:14px;height:26px}
+  .door-card{left:calc(50% + 80px);top:36%;max-width:120px;font-size:9px}
+  .door-card .card-title{font-size:8px}
+  .door-card .card-sub{font-size:7px}
+  .shoes{right:26%;bottom:18%}
+  .shoe{width:30px;height:10px}
+  .shoe+.shoe{left:20px;width:26px}
+  .coat-hook{right:22%;top:18%}
+  #curator-panel{display:none}
+  .lb-img{max-width:92vw;max-height:55vh}
+  .lb-title{font-size:18px}
+  .lb-text{font-size:13px}
+  .door-hint{font-size:10px}
+}
+</style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div id="loader">
+  <div class="loader-title">SALON VII</div>
+  <div class="loader-subtitle">Salle I — They Said This Wasn't Art</div>
+  <div class="loader-bar"><div class="loader-progress" id="loader-progress"></div></div>
+</div>
+
+<!-- DOOR SCENE -->
+<div id="door-scene">
+  <div class="corridor"></div>
+  <div class="shoes"><div class="shoe"></div><div class="shoe"></div></div>
+  <div class="coat-hook"><div class="hook"></div><div class="jacket"></div></div>
+  <div class="door-card">
+    <div class="card-title">Salle I</div>
+    <div class="card-sub">They Said This Wasn't Art<br>/ 他们说这不是艺术</div>
+  </div>
+  <div class="door-stage" id="door-stage">
+    <div class="door-wrap" id="door-wrap">
+      <div class="door-face">
+        <div class="door-panel top"></div>
+        <div class="door-panel bottom"></div>
+        <div class="nameplate"><span>SALON VII</span></div>
+        <div class="knob"></div>
+      </div>
+      <div class="door-light"></div>
+    </div>
+  </div>
+  <div class="door-hint">Enter the gallery</div>
+</div>
+
+<!-- GALLERY SCENE -->
+<div id="gallery-scene"></div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox">
+  <div class="lb-close" id="lb-close">&times;</div>
+  <div class="lb-content">
+    <img class="lb-img" id="lb-img" src="" alt="">
+    <div class="lb-info">
+      <div class="lb-title" id="lb-title"></div>
+      <div class="lb-artist" id="lb-artist"></div>
+      <div class="lb-text" id="lb-text"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CURATOR PANEL -->
+<div id="curator-panel">
+  <div class="curator-toggle">◐</div>
+  <div class="curator-body">
+    <p class="curator-title">策展人的话</p>
+    <p>They laughed. They recoiled. They called it a joke, a scandal, a mistake.</p>
+    <p>Six works. Six rejections. The critics are dead. The paintings are not.</p>
+    <p class="curator-sig">— Salon VII, Salle I</p>
+  </div>
+</div>
+
+<!-- THREE.JS CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r163/three.min.js">
+</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/controls/OrbitControls.js">
+</script>
+
+<script>
+/* ────────────────────────────────────────────
+   SALON VII — Three.js Gallery
+   ──────────────────────────────────────────── */
+
+// ── LOADING ──
+const loaderProg = document.getElementById('loader-progress');
+const loaderEl = document.getElementById('loader');
+let loadProgress = 0;
+function updateLoader(pct) {
+  loadProgress = Math.min(100, loadProgress + pct);
+  loaderProg.style.width = loadProgress + '%';
+}
+
+// ── DOOR SCENE ──
+const doorScene = document.getElementById('door-scene');
+const doorWrap = document.getElementById('door-wrap');
+const doorStage = document.getElementById('door-stage');
+const galleryEl = document.getElementById('gallery-scene');
+const curatorPanel = document.getElementById('curator-panel');
+let doorOpen = false;
+
+doorStage.addEventListener('click', () => {
+  if (doorOpen) return;
+  doorOpen = true;
+  doorWrap.classList.add('open');
+  // After door opens, transition to gallery
+  setTimeout(() => {
+    doorScene.classList.add('fade-out');
+    galleryEl.classList.add('visible');
+    curatorPanel.classList.add('visible');
+    // Hide loader if still visible
+    loaderEl.classList.add('hidden');
+    // Start intro tween
+    startIntroTween();
+  }, 950);
+});
+
+// ── THREE.JS SETUP ──
+let camera, scene, renderer, controls;
+let paintings = [];
+let raycaster, mouse;
+let clock, introTween;
+
+function initThree() {
+  const container = galleryEl;
+  const aspect = window.innerWidth / window.innerHeight;
+
+  // Renderer
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ReinhardToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  container.appendChild(renderer.domElement);
+  updateLoader(10);
+
+  // Scene
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0f0a);
+  scene.fog = new THREE.Fog(0x0a0f0a, 6, 16);
+
+  // Camera
+  camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 100);
+  camera.position.set(0, 1.7, 5.5);
+  camera.lookAt(0, 1.7, -2);
+
+  // Controls
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 1.7, -2);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.06;
+  controls.minPolarAngle = 0.4;
+  controls.maxPolarAngle = 1.35;
+  controls.minAzimuthAngle = -1.1;
+  controls.maxAzimuthAngle = 1.1;
+  controls.minDistance = 1.5;
+  controls.maxDistance = 8;
+  controls.update();
+
+  // Raycaster
+  raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2();
+
+  // Clock
+  clock = new THREE.Clock();
+
+  buildRoom();
+  buildLighting();
+  buildChandelier();
+  buildBenches();
+  buildRug();
+  buildPaintings();
+  updateLoader(20);
+
+  // Event listeners
+  window.addEventListener('resize', onResize);
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('click', onClick);
+  window.addEventListener('touchstart', onTouchStart, { passive: false });
+}
+
+function buildRoom() {
+  const W = 12, D = 8, H = 4;
+
+  // Textures
+  const texLoader = new THREE.TextureLoader();
+
+  // Floor — wood parquet
+  let floorTex;
+  try {
+    floorTex = texLoader.load(
+      'https://threejs.org/examples/textures/hardwood2_diffuse.jpg',
+      () => updateLoader(5),
+      undefined,
+      () => { /* fallback */ }
+    );
+  } catch(e) {}
+  if (floorTex) {
+    floorTex.wrapS = THREE.RepeatWrapping;
+    floorTex.wrapT = THREE.RepeatWrapping;
+    floorTex.repeat.set(5, 5);
+  }
+
+  const floorGeo = new THREE.PlaneGeometry(W, D);
+  const floorMat = new THREE.MeshStandardMaterial({
+    map: floorTex || undefined,
+    color: floorTex ? 0xffffff : 0x3a2818,
+    roughness: 0.7,
+    metalness: 0.0
+  });
+  const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(0, 0, -D/4);
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // Ceiling
+  const ceilGeo = new THREE.PlaneGeometry(W, D);
+  const ceilMat = new THREE.MeshStandardMaterial({ color: 0x1a1208, roughness: 0.9, metalness: 0.0 });
+  const ceiling = new THREE.Mesh(ceilGeo, ceilMat);
+  ceiling.rotation.x = Math.PI / 2;
+  ceiling.position.set(0, H, -D/4);
+  ceiling.receiveShadow = true;
+  scene.add(ceiling);
+
+  // Walls
+  const wallMat = new THREE.MeshStandardMaterial({
+    color: 0x1a2a1f,
+    roughness: 0.95,
+    metalness: 0.0
+  });
+
+  // Back wall
+  const backGeo = new THREE.PlaneGeometry(W, H);
+  const backWall = new THREE.Mesh(backGeo, wallMat);
+  backWall.position.set(0, H/2, -D/2 - D/4);
+  backWall.receiveShadow = true;
+  scene.add(backWall);
+
+  // Left wall
+  const leftGeo = new THREE.PlaneGeometry(D, H);
+  const leftWall = new THREE.Mesh(leftGeo, wallMat);
+  leftWall.rotation.y = Math.PI / 2;
+  leftWall.position.set(-W/2, H/2, -D/4);
+  leftWall.receiveShadow = true;
+  scene.add(leftWall);
+
+  // Right wall
+  const rightGeo = new THREE.PlaneGeometry(D, H);
+  const rightWall = new THREE.Mesh(rightGeo, wallMat);
+  rightWall.rotation.y = -Math.PI / 2;
+  rightWall.position.set(W/2, H/2, -D/4);
+  rightWall.receiveShadow = true;
+  scene.add(rightWall);
+
+  // Crown molding
+  const moldingMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.3, metalness: 0.7 });
+  addCrownMolding(W, D, H, moldingMat);
+  updateLoader(5);
+}
+
+function addCrownMolding(W, D, H, mat) {
+  const r = 0.05;
+  // Back
+  const b1 = new THREE.Mesh(new THREE.BoxGeometry(W + 0.2, r*2, r*2), mat);
+  b1.position.set(0, H - 0.08, -D/2 - D/4);
+  scene.add(b1);
+  // Left
+  const b2 = new THREE.Mesh(new THREE.BoxGeometry(D + 0.2, r*2, r*2), mat);
+  b2.position.set(-W/2, H - 0.08, -D/4);
+  scene.add(b2);
+  // Right
+  const b3 = new THREE.Mesh(new THREE.BoxGeometry(D + 0.2, r*2, r*2), mat);
+  b3.position.set(W/2, H - 0.08, -D/4);
+  scene.add(b3);
+
+  // Baseboard
+  const bbMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.6, metalness: 0.0 });
+  const bb1 = new THREE.Mesh(new THREE.BoxGeometry(W + 0.1, 0.15, 0.08), bbMat);
+  bb1.position.set(0, 0.075, -D/2 - D/4 + 0.04);
+  scene.add(bb1);
+  const bb2 = new THREE.Mesh(new THREE.BoxGeometry(D + 0.1, 0.15, 0.08), bbMat);
+  bb2.position.set(-W/2 + 0.04, 0.075, -D/4);
+  scene.add(bb2);
+  const bb3 = new THREE.Mesh(new THREE.BoxGeometry(D + 0.1, 0.15, 0.08), bbMat);
+  bb3.position.set(W/2 - 0.04, 0.075, -D/4);
+  scene.add(bb3);
+}
+
+function buildLighting() {
+  const D = 8;
+
+  // Ambient — very dim
+  const ambient = new THREE.AmbientLight(0x1a0f05, 0.4);
+  scene.add(ambient);
+
+  // Chandelier main light
+  const chandelier = new THREE.PointLight(0xffd060, 3.0, 18, 2);
+  chandelier.position.set(0, 3.7, -D/4 - 0.5);
+  chandelier.castShadow = true;
+  chandelier.shadow.mapSize.width = 1024;
+  chandelier.shadow.mapSize.height = 1024;
+  chandelier.shadow.camera.near = 0.5;
+  chandelier.shadow.camera.far = 20;
+  scene.add(chandelier);
+
+  // Left sconce
+  const sconceL = new THREE.PointLight(0xff9020, 1.5, 8, 2);
+  sconceL.position.set(-5.8, 2.5, -D/4 - 0.5);
+  sconceL.castShadow = true;
+  sconceL.shadow.mapSize.width = 512;
+  sconceL.shadow.mapSize.height = 512;
+  scene.add(sconceL);
+
+  // Right sconce
+  const sconceR = new THREE.PointLight(0xff9020, 1.5, 8, 2);
+  sconceR.position.set(5.8, 2.5, -D/4 - 0.5);
+  sconceR.castShadow = true;
+  sconceR.shadow.mapSize.width = 512;
+  sconceR.shadow.mapSize.height = 512;
+  scene.add(sconceR);
+
+  // Sconce fixtures
+  const sconceGeo = new THREE.CylinderGeometry(0.06, 0.04, 0.2, 8);
+  const sconceMat = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.3, metalness: 0.8 });
+  [-5.8, 5.8].forEach(x => {
+    const fix = new THREE.Mesh(sconceGeo, sconceMat);
+    fix.position.set(x, 2.5, -D/4 - 0.2);
+    scene.add(fix);
+    // Candle flame
+    const flameGeo = new THREE.SphereGeometry(0.04, 8, 8);
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+    const flame = new THREE.Mesh(flameGeo, flameMat);
+    flame.position.set(x, 2.62, -D/4 - 0.2);
+    scene.add(flame);
+  });
+}
+
+function buildChandelier() {
+  const D = 8;
+  const gold = new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.25, metalness: 0.8 });
+
+  // Central rod
+  const rodGeo = new THREE.CylinderGeometry(0.02, 0.02, 1.0);
+  const rod = new THREE.Mesh(rodGeo, gold);
+  rod.position.set(0, 3.3, -D/4);
+  scene.add(rod);
+
+  // Ring
+  const ringGeo = new THREE.TorusGeometry(0.35, 0.025, 8, 32);
+  const ring = new THREE.Mesh(ringGeo, gold);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.set(0, 3.55, -D/4);
+  scene.add(ring);
+
+  // Arms + candle flames
+  for (let i = 0; i < 6; i++) {
+    const angle = (i / 6) * Math.PI * 2;
+    const x = Math.cos(angle) * 0.3;
+    const z = Math.sin(angle) * 0.3;
+
+    // Arm
+    const armGeo = new THREE.CylinderGeometry(0.008, 0.008, 0.5, 8);
+    const arm = new THREE.Mesh(armGeo, gold);
+    arm.position.set(x, 3.55, -D/4 + z);
+    arm.rotation.z = Math.PI / 2;
+    arm.rotation.y = angle;
+    scene.add(arm);
+
+    // Flame
+    const flameGeo = new THREE.SphereGeometry(0.035, 8, 8);
+    const flameMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+    const flame = new THREE.Mesh(flameGeo, flameMat);
+    flame.position.set(x, 3.76, -D/4 + z);
+    scene.add(flame);
+  }
+
+  // Ceiling rose
+  const roseGeo = new THREE.CylinderGeometry(0.25, 0.2, 0.08, 16);
+  const rose = new THREE.Mesh(roseGeo, gold);
+  rose.position.set(0, 3.85, -D/4);
+  scene.add(rose);
+}
+
+function buildBenches() {
+  const D = 8;
+  const woodMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f, roughness: 0.5, metalness: 0.0 });
+
+  // Two benches facing back wall
+  [-1.2, 1.2].forEach(x => {
+    // Seat
+    const seatGeo = new THREE.BoxGeometry(1.8, 0.08, 0.45);
+    const seat = new THREE.Mesh(seatGeo, woodMat);
+    seat.position.set(x, 0.5, -D/4 + 1.8);
+    seat.castShadow = true;
+    seat.receiveShadow = true;
+    scene.add(seat);
+
+    // Legs
+    const legGeo = new THREE.BoxGeometry(0.06, 0.42, 0.06);
+    const legMat = new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 0.5, metalness: 0.0 });
+    [[-0.8, -0.18], [-0.8, 0.18], [0.8, -0.18], [0.8, 0.18]].forEach(([dx, dz]) => {
+      const leg = new THREE.Mesh(legGeo, legMat);
+      leg.position.set(x + dx, 0.25, -D/4 + 1.8 + dz);
+      leg.castShadow = true;
+      scene.add(leg);
+    });
+  });
+}
+
+function buildRug() {
+  const D = 8;
+  // Generate rug texture with canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+
+  // Dark red base
+  ctx.fillStyle = '#4a1818';
+  ctx.fillRect(0, 0, 256, 128);
+
+  // Border
+  ctx.strokeStyle = '#c9a84c';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(20, 10, 216, 108);
+
+  // Pattern
+  ctx.strokeStyle = '#8a2828';
+  ctx.lineWidth = 1;
+  for (let x = 40; x < 230; x += 28) {
+    ctx.beginPath();
+    ctx.moveTo(x, 18);
+    ctx.lineTo(x, 110);
+    ctx.stroke();
+  }
+  for (let y = 18; y < 118; y += 14) {
+    ctx.beginPath();
+    ctx.moveTo(28, y);
+    ctx.lineTo(228, y);
+    ctx.stroke();
+  }
+
+  const rugTex = new THREE.CanvasTexture(canvas);
+  rugTex.wrapS = THREE.RepeatWrapping;
+  rugTex.wrapT = THREE.RepeatWrapping;
+  rugTex.repeat.set(1, 1);
+
+  const rugGeo = new THREE.PlaneGeometry(3.5, 2.0);
+  const rugMat = new THREE.MeshStandardMaterial({ map: rugTex, roughness: 0.85, metalness: 0.0 });
+  const rug = new THREE.Mesh(rugGeo, rugMat);
+  rug.rotation.x = -Math.PI / 2;
+  rug.position.set(0, 0.005, -D/4 + 1.8);
+  rug.receiveShadow = true;
+  scene.add(rug);
+}
+
+// ── PAINTINGS ──
+function buildFrame(w, h) {
+  const group = new THREE.Group();
+  const frameMat = new THREE.MeshStandardMaterial({
+    color: 0xb8960c,
+    roughness: 0.3,
+    metalness: 0.7
+  });
+
+  // Ornate frame — build with multiple boxes
+  const frameThick = 0.06;
+  const frameWidth = 0.08;
+
+  // Outer rect — top/bottom/left/right bars
+  const topBar = new THREE.Mesh(new THREE.BoxGeometry(w + frameWidth*2, frameThick, 0.04), frameMat);
+  topBar.position.y = h/2 + frameThick/2;
+  group.add(topBar);
+
+  const bottomBar = new THREE.Mesh(new THREE.BoxGeometry(w + frameWidth*2, frameThick, 0.04), frameMat);
+  bottomBar.position.y = -h/2 - frameThick/2;
+  group.add(bottomBar);
+
+  const leftBar = new THREE.Mesh(new THREE.BoxGeometry(frameThick, h, 0.04), frameMat);
+  leftBar.position.x = -w/2 - frameWidth + frameThick/2;
+  group.add(leftBar);
+
+  const rightBar = new THREE.Mesh(new THREE.BoxGeometry(frameThick, h, 0.04), frameMat);
+  rightBar.position.x = w/2 + frameWidth - frameThick/2;
+  group.add(rightBar);
+
+  // Inner bevel (slightly recessed)
+  const bevelMat = new THREE.MeshStandardMaterial({
+    color: 0xa08030,
+    roughness: 0.35,
+    metalness: 0.65
+  });
+  const bevelThick = 0.03;
+  const bevelInset = 0.02;
+
+  const bTop = new THREE.Mesh(new THREE.BoxGeometry(w - bevelInset*2, bevelThick, 0.02), bevelMat);
+  bTop.position.y = h/2 - bevelThick;
+  bTop.position.z = -0.02;
+  group.add(bTop);
+
+  const bBottom = new THREE.Mesh(new THREE.BoxGeometry(w - bevelInset*2, bevelThick, 0.02), bevelMat);
+  bBottom.position.y = -h/2 + bevelThick;
+  bBottom.position.z = -0.02;
+  group.add(bBottom);
+
+  const bLeft = new THREE.Mesh(new THREE.BoxGeometry(bevelThick, h - bevelInset*2, 0.02), bevelMat);
+  bLeft.position.x = -w/2 + bevelThick/2;
+  bLeft.position.z = -0.02;
+  group.add(bLeft);
+
+  const bRight = new THREE.Mesh(new THREE.BoxGeometry(bevelThick, h - bevelInset*2, 0.02), bevelMat);
+  bRight.position.x = w/2 - bevelThick/2;
+  bRight.position.z = -0.02;
+  group.add(bRight);
+
+  return group;
+}
+
+function createPaintingTexture(url, fallbackColor) {
+  return new Promise((resolve) => {
+    const loader = new THREE.TextureLoader();
+    // Try with crossOrigin
+    loader.crossOrigin = 'anonymous';
+    loader.load(
+      url,
+      (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        updateLoader(3);
+        resolve(tex);
+      },
+      undefined,
+      () => {
+        // Fallback: solid color canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = fallbackColor || '#3a3020';
+        ctx.fillRect(0, 0, 256, 256);
+
+        // Add artist name as label
+        ctx.fillStyle = '#c9a84c';
+        ctx.font = '14px serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Image unavailable', 128, 128);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        updateLoader(1);
+        resolve(tex);
+      }
+    );
+  });
+}
+
+function createBananaTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#f5f0e8';
+  ctx.fillRect(0, 0, 128, 256);
+
+  // Banana
+  ctx.save();
+  ctx.translate(64, 130);
+  ctx.rotate(-0.25);
+  ctx.fillStyle = '#f5d93a';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 18, 55, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#e8c820';
+  ctx.beginPath();
+  ctx.ellipse(2, -2, 14, 48, 0.1, 0, Math.PI * 2);
+  ctx.fill();
+  // Tip
+  ctx.fillStyle = '#8a6a20';
+  ctx.beginPath();
+  ctx.ellipse(0, -50, 6, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Stem
+  ctx.fillStyle = '#5a4a20';
+  ctx.fillRect(-4, 48, 8, 10);
+  ctx.restore();
+
+  // Tape
+  ctx.fillStyle = 'rgba(180,175,170,0.85)';
+  ctx.fillRect(52, 60, 24, 60);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  updateLoader(2);
+  return tex;
+}
+
+const paintingData = [
+  {
+    id: 'guernica',
+    title: 'Guernica',
+    artist: 'Pablo Picasso, 1937',
+    text: 'They said it was propaganda. He said: "No, it is a mirror."',
+    url: 'https://upload.wikimedia.org/wikipedia/en/7/74/PicassoGuernica.jpg',
+    pos: [0, 1.8, -3.96],
+    rot: 0,
+    size: [2.2, 1.2],
+    spotPos: [0, 3.8, -2.8],
+    fallback: '#1a1a2a'
+  },
+  {
+    id: 'manet',
+    title: 'Le Déjeuner sur l\'herbe',
+    artist: 'Édouard Manet, 1863',
+    text: 'Rejected from the Salon. Shown at the Salon des Refusés. The refusal became the statement.',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Edouard_Manet_-_Le_D%C3%A9jeuner_sur_l%27herbe_-_Google_Art_Project.jpg/1200px-Edouard_Manet_-_Le_D%C3%A9jeuner_sur_l%27herbe_-_Google_Art_Project.jpg',
+    pos: [-2.8, 1.8, -3.96],
+    rot: 0,
+    size: [1.3, 1.1],
+    spotPos: [-2.8, 3.8, -2.8],
+    fallback: '#2a3a1a'
+  },
+  {
+    id: 'duchamp',
+    title: 'Fountain',
+    artist: 'Marcel Duchamp, 1917',
+    text: 'A urinal. Submitted to the Society of Independent Artists, 1917. Rejected. Now priceless.',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Marcel_Duchamp%2C_1917%2C_Fountain%2C_photograph_by_Alfred_Stieglitz.jpg/400px-Marcel_Duchamp%2C_1917%2C_Fountain%2C_photograph_by_Alfred_Stieglitz.jpg',
+    pos: [-5.95, 1.9, -2.5],
+    rot: Math.PI/2,
+    size: [1.0, 1.3],
+    spotPos: [-5.0, 3.8, -2.5],
+    fallback: '#3a3a3a'
+  },
+  {
+    id: 'monet',
+    title: 'Impression, Sunrise',
+    artist: 'Claude Monet, 1872',
+    text: 'The critic called it trash. The insult became the movement\'s name.',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Monet_-_Impression%2C_Sunrise.jpg/1200px-Monet_-_Impression%2C_Sunrise.jpg',
+    pos: [5.95, 1.9, -2.5],
+    rot: -Math.PI/2,
+    size: [1.4, 1.1],
+    spotPos: [5.0, 3.8, -2.5],
+    fallback: '#2a3a4a'
+  },
+  {
+    id: 'magritte',
+    title: 'The Treachery of Images',
+    artist: 'René Magritte, 1929',
+    text: 'Ceci n\'est pas une pipe. Of course it isn\'t. It\'s a painting. Pay attention.',
+    url: 'https://upload.wikimedia.org/wikipedia/en/b/b9/MagrittePipe.jpg',
+    pos: [5.95, 1.6, -1.0],
+    rot: -Math.PI/2,
+    size: [0.9, 0.7],
+    spotPos: [5.0, 3.4, -1.0],
+    fallback: '#5a4a3a'
+  },
+  {
+    id: 'cattelan',
+    title: 'Comedian',
+    artist: 'Maurizio Cattelan, 2019',
+    text: '£120,000. Eaten by a performance artist at the opening. Replaced with a new banana.',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Comedian_2019.jpg/400px-Comedian_2019.jpg',
+    pos: [5.95, 1.1, -4.0],
+    rot: -Math.PI/2,
+    size: [0.5, 0.7],
+    spotPos: [5.0, 2.9, -4.0],
+    fallback: 'banana'
+  }
+];
+
+async function buildPaintings() {
+  for (const pd of paintingData) {
+    // Load texture
+    let tex;
+    if (pd.fallback === 'banana') {
+      tex = createBananaTexture();
+      // Still try the URL
+      try {
+        const realTex = await createPaintingTexture(pd.url, pd.fallback);
+        tex = realTex;
+      } catch(e) {}
+    } else {
+      tex = await createPaintingTexture(pd.url, pd.fallback);
+    }
+
+    // Canvas material
+    const canvasMat = new THREE.MeshStandardMaterial({
+      map: tex,
+      roughness: 0.6,
+      metalness: 0.0
+    });
+
+    // Canvas plane
+    const canvasGeo = new THREE.PlaneGeometry(pd.size[0], pd.size[1]);
+    const canvasMesh = new THREE.Mesh(canvasGeo, canvasMat);
+    canvasMesh.castShadow = false;
+    canvasMesh.receiveShadow = true;
+    canvasMesh.position.set(pd.pos[0], pd.pos[1], pd.pos[2]);
+    canvasMesh.rotation.y = pd.rot;
+
+    // Frame
+    const frame = buildFrame(pd.size[0], pd.size[1]);
+    frame.position.copy(canvasMesh.position);
+    frame.rotation.y = pd.rot;
+
+    // Spotlight
+    const spot = new THREE.SpotLight(0xfff5e0, 1.0, 6, 0.35, 0.3);
+    spot.position.set(pd.spotPos[0], pd.spotPos[1], pd.spotPos[2]);
+    spot.target.position.set(pd.pos[0], pd.pos[1], pd.pos[2]);
+    spot.castShadow = true;
+    spot.shadow.mapSize.width = 512;
+    spot.shadow.mapSize.height = 512;
+
+    const paintingObj = {
+      id: pd.id,
+      title: pd.title,
+      artist: pd.artist,
+      text: pd.text,
+      url: pd.url,
+      mesh: canvasMesh,
+      frame: frame,
+      spotlight: spot,
+      defaultIntensity: 1.0
+    };
+
+    scene.add(canvasMesh);
+    scene.add(frame);
+    scene.add(spot);
+    scene.add(spot.target);
+    paintings.push(paintingObj);
+  }
+  updateLoader(15);
+}
+
+// ── INTRO TWEEN ──
+function startIntroTween() {
+  introTween = {
+    startZ: 5.5,
+    endZ: 3.5,
+    startY: 1.9,
+    endY: 1.7,
+    duration: 2.0,
+    elapsed: 0,
+    active: true
+  };
+}
+
+// ── INTERACTION ──
+let hovered = null;
+
+function onMouseMove(e) {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const targets = paintings.map(p => p.mesh);
+  const intersects = raycaster.intersectObjects(targets);
+
+  if (intersects.length > 0) {
+    const obj = intersects[0].object;
+    const painting = paintings.find(p => p.mesh === obj);
+    if (painting && hovered !== painting) {
+      // Unhover previous
+      if (hovered) {
+        hovered.spotlight.intensity = hovered.defaultIntensity;
+        hovered.frame.children.forEach(c => {
+          if (c.material && c.material.emissive) c.material.emissive.set(0x000000);
+        });
+        document.body.style.cursor = 'default';
+      }
+      // Hover new
+      hovered = painting;
+      painting.spotlight.intensity = 1.6;
+      document.body.style.cursor = 'pointer';
+    }
+  } else if (hovered) {
+    hovered.spotlight.intensity = hovered.defaultIntensity;
+    hovered = null;
+    document.body.style.cursor = 'default';
+  }
+}
+
+function onTouchStart(e) {
+  if (e.touches.length === 1) {
+    const touch = e.touches[0];
+    mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const targets = paintings.map(p => p.mesh);
+    const intersects = raycaster.intersectObjects(targets);
+
+    if (intersects.length > 0) {
+      const obj = intersects[0].object;
+      const painting = paintings.find(p => p.mesh === obj);
+      if (painting) {
+        e.preventDefault();
+        openLightbox(painting);
+      }
+    }
+  }
+}
+
+function onClick(e) {
+  if (!hovered) return;
+  openLightbox(hovered);
+}
+
+function openLightbox(painting) {
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lb-img').src = painting.url;
+  document.getElementById('lb-title').textContent = painting.title;
+  document.getElementById('lb-artist').textContent = painting.artist;
+  document.getElementById('lb-text').textContent = painting.text;
+  lb.classList.add('active');
+}
+
+// ── LIGHTBOX CLOSE ──
+document.getElementById('lb-close').addEventListener('click', () => {
+  document.getElementById('lightbox').classList.remove('active');
+});
+document.getElementById('lightbox').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) {
+    e.currentTarget.classList.remove('active');
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    document.getElementById('lightbox').classList.remove('active');
+  }
+});
+
+// ── RESIZE ──
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// ── RENDER LOOP ──
+function animate() {
+  requestAnimationFrame(animate);
+
+  const dt = Math.min(clock.getDelta(), 0.1);
+  controls.update();
+
+  // Intro tween
+  if (introTween && introTween.active) {
+    introTween.elapsed += dt;
+    const t = Math.min(introTween.elapsed / introTween.duration, 1.0);
+    // Ease out cubic
+    const ease = 1 - Math.pow(1 - t, 3);
+    camera.position.z = introTween.startZ + (introTween.endZ - introTween.startZ) * ease;
+    camera.position.y = introTween.startY + (introTween.endY - introTween.startY) * ease;
+    if (t >= 1.0) {
+      introTween.active = false;
+      introTween = null;
+    }
+  }
+
+  // Animate chandelier flames (subtle flicker)
+  const t = performance.now() * 0.001;
+  scene.children.forEach(child => {
+    if (child.material && child.material.isMeshBasicMaterial && child.material.color.getHex() === 0xffaa00) {
+      const scale = 0.85 + Math.sin(t * 12 + child.position.x * 20) * 0.15;
+      child.scale.setScalar(scale);
+    }
+  });
+
+  renderer.render(scene, camera);
+}
+
+// ── INIT ──
+async function init() {
+  updateLoader(5);
+  initThree();
+  updateLoader(10);
+
+  // Wait for paintings to load
+  await new Promise(resolve => {
+    const check = () => {
+      if (paintings.length >= 6) {
+        updateLoader(30);
+        resolve();
+      } else {
+        setTimeout(check, 200);
+      }
+    };
+    check();
+  });
+
+  updateLoader(5);
+  animate();
+  updateLoader(10);
+}
+
+init();
+</script>
+</body>
+</html>
+
