@@ -45,7 +45,7 @@ canvas{display:block}
 .jacket::after{content:'';position:absolute;top:16px;left:4px;width:16px;height:28px;background:linear-gradient(135deg,#5a4030,#4a3020);border-radius:4px;transform:rotate(-12deg)}
 
 /* Card pinned beside door */
-.door-card{position:absolute;left:calc(50% + 100px);top:38%;transform:translateY(-50%);background:rgba(30,20,12,0.85);border:1px solid rgba(180,140,100,0.3);padding:10px 14px;max-width:160px;font-size:11px;font-weight:300;line-height:1.5;color:#b8a080;backdrop-filter:blur(4px);opacity:0.85}
+.door-card{position:absolute;left:calc(50% + 140px);top:38%;transform:translateY(-50%);background:rgba(30,20,12,0.85);border:1px solid rgba(180,140,100,0.3);padding:12px 16px;max-width:180px;font-size:12px;font-weight:300;line-height:1.5;color:#b8a080;backdrop-filter:blur(4px);opacity:0.85}
 .door-card .card-title{font-size:10px;font-weight:500;letter-spacing:0.15em;color:#c9a84c;margin-bottom:4px}
 .door-card .card-sub{font-size:9px;font-style:italic;color:#9a8a6a}
 
@@ -53,7 +53,7 @@ canvas{display:block}
 .door-card::before{content:'';position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:6px;height:6px;background:radial-gradient(circle,#c9a84c,#7a5a2a);border-radius:50%;box-shadow:0 0 4px rgba(201,168,76,0.3)}
 
 /* Door container */
-.door-wrap{position:relative;width:240px;height:380px;transform-style:preserve-3d;transition:transform 0.9s cubic-bezier(0.25,0.1,0.25,1);transform-origin:left center;z-index:10}
+.door-wrap{position:relative;width:320px;height:500px;transform-style:preserve-3d;transition:transform 0.9s cubic-bezier(0.25,0.1,0.25,1);transform-origin:left center;z-index:10}
 .door-wrap.open{transform:rotateY(-105deg)}
 
 .door-face{position:absolute;inset:0;background:linear-gradient(180deg,#5a3a28 0%,#4a2a18 30%,#3a2010 60%,#2a1808 100%);border-radius:6px 6px 0 0;box-shadow:inset 2px 0 6px rgba(0,0,0,0.3),4px 4px 16px rgba(0,0,0,0.5)}
@@ -62,13 +62,13 @@ canvas{display:block}
 .door-face::after{content:'';position:absolute;top:50%;left:20px;right:20px;height:2px;background:rgba(0,0,0,0.12)}
 
 /* Door panels detail */
-.door-panel{position:absolute;left:28px;right:28px;border:1px solid rgba(0,0,0,0.1);border-radius:3px;background:rgba(0,0,0,0.04)}
-.door-panel.top{top:26px;bottom:52%}
-.door-panel.bottom{top:52%;bottom:26px}
+.door-panel{position:absolute;left:34px;right:34px;border:1px solid rgba(0,0,0,0.1);border-radius:3px;background:rgba(0,0,0,0.04)}
+.door-panel.top{top:32px;bottom:52%}
+.door-panel.bottom{top:52%;bottom:32px}
 
 /* Brass nameplate */
-.nameplate{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);width:130px;background:linear-gradient(135deg,#c9a84c,#a0802a,#c9a84c);border-radius:3px;padding:6px 10px;text-align:center;box-shadow:0 0 8px rgba(201,168,76,0.3),inset 0 0 2px rgba(255,255,220,0.3)}
-.nameplate span{font-size:15px;font-weight:500;letter-spacing:0.35em;color:#2a1a08;line-height:1}
+.nameplate{position:absolute;top:42%;left:50%;transform:translate(-50%,-50%);width:160px;background:linear-gradient(135deg,#c9a84c,#a0802a,#c9a84c);border-radius:3px;padding:7px 12px;text-align:center;box-shadow:0 0 8px rgba(201,168,76,0.3),inset 0 0 2px rgba(255,255,220,0.3)}
+.nameplate span{font-size:17px;font-weight:500;letter-spacing:0.35em;color:#2a1a08;line-height:1}
 
 /* Brass knob */
 .knob{position:absolute;right:16px;top:53%;width:18px;height:34px;transform:translateY(-50%);background:linear-gradient(135deg,#d4b060,#a0802a,#d4b060);border-radius:50%/40%;box-shadow:0 0 8px rgba(201,168,76,0.3),inset -1px -1px 3px rgba(0,0,0,0.3),inset 1px 1px 3px rgba(255,255,200,0.3);transition:filter 0.3s ease}
@@ -110,11 +110,11 @@ canvas{display:block}
 
 /* ── MOBILE ── */
 @media(max-width:768px){
-  .door-wrap{width:180px;height:300px}
-  .nameplate{width:100px}
+  .door-wrap{width:240px;height:380px}
+  .nameplate{width:110px}
   .nameplate span{font-size:12px;letter-spacing:0.25em}
   .knob{right:12px;width:14px;height:26px}
-  .door-card{left:calc(50% + 80px);top:36%;max-width:120px;font-size:9px}
+  .door-card{left:calc(50% + 110px);top:36%;max-width:130px;font-size:10px}
   .door-card .card-title{font-size:8px}
   .door-card .card-sub{font-size:7px}
   .shoes{right:26%;bottom:18%}
@@ -263,22 +263,22 @@ function initThree() {
   scene.background = new THREE.Color(0x0a0f0a);
   scene.fog = new THREE.Fog(0x0a0f0a, 6, 16);
 
-  // Camera
-  camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 100);
-  camera.position.set(0, 1.7, 5.5);
-  camera.lookAt(0, 1.7, -2);
+  // Camera — narrower FOV for intimate gallery feel, no overhead view
+  camera = new THREE.PerspectiveCamera(42, aspect, 0.1, 100);
+  camera.position.set(0, 1.65, 5.0);
+  camera.lookAt(0, 1.65, -2);
 
-  // Controls
+  // Controls — tighter limits, snappier feel
   controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 1.7, -2);
+  controls.target.set(0, 1.65, -2);
   controls.enableDamping = true;
-  controls.dampingFactor = 0.06;
-  controls.minPolarAngle = 0.4;
-  controls.maxPolarAngle = 1.35;
-  controls.minAzimuthAngle = -1.1;
-  controls.maxAzimuthAngle = 1.1;
-  controls.minDistance = 1.5;
-  controls.maxDistance = 8;
+  controls.dampingFactor = 0.12;
+  controls.minPolarAngle = 0.6;
+  controls.maxPolarAngle = 1.2;
+  controls.minAzimuthAngle = -0.9;
+  controls.maxAzimuthAngle = 0.9;
+  controls.minDistance = 1.8;
+  controls.maxDistance = 6;
   controls.update();
 
   // Raycaster
@@ -760,10 +760,10 @@ const paintingData = [
     artist: 'Pablo Picasso, 1937',
     text: 'They said it was propaganda. He said: "No, it is a mirror."',
     url: 'https://upload.wikimedia.org/wikipedia/en/7/74/PicassoGuernica.jpg',
-    pos: [0, 1.8, -3.96],
+    pos: [0, 2.0, -5.92],
     rot: 0,
-    size: [2.2, 1.2],
-    spotPos: [0, 3.8, -2.8],
+    size: [2.4, 1.3],
+    spotPos: [0, 3.9, -4.5],
     fallback: '#1a1a2a'
   },
   {
@@ -772,10 +772,10 @@ const paintingData = [
     artist: 'Édouard Manet, 1863',
     text: 'Rejected from the Salon. Shown at the Salon des Refusés. The refusal became the statement.',
     url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Edouard_Manet_-_Le_D%C3%A9jeuner_sur_l%27herbe_-_Google_Art_Project.jpg/1200px-Edouard_Manet_-_Le_D%C3%A9jeuner_sur_l%27herbe_-_Google_Art_Project.jpg',
-    pos: [-2.8, 1.8, -3.96],
+    pos: [-3.0, 2.0, -5.92],
     rot: 0,
-    size: [1.3, 1.1],
-    spotPos: [-2.8, 3.8, -2.8],
+    size: [1.4, 1.2],
+    spotPos: [-3.0, 3.9, -4.5],
     fallback: '#2a3a1a'
   },
   {
@@ -784,7 +784,7 @@ const paintingData = [
     artist: 'Marcel Duchamp, 1917',
     text: 'A urinal. Submitted to the Society of Independent Artists, 1917. Rejected. Now priceless.',
     url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Marcel_Duchamp%2C_1917%2C_Fountain%2C_photograph_by_Alfred_Stieglitz.jpg/400px-Marcel_Duchamp%2C_1917%2C_Fountain%2C_photograph_by_Alfred_Stieglitz.jpg',
-    pos: [-5.95, 1.9, -2.5],
+    pos: [-5.92, 1.9, -2.5],
     rot: Math.PI/2,
     size: [1.0, 1.3],
     spotPos: [-5.0, 3.8, -2.5],
@@ -796,7 +796,7 @@ const paintingData = [
     artist: 'Claude Monet, 1872',
     text: 'The critic called it trash. The insult became the movement\'s name.',
     url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/59/Monet_-_Impression%2C_Sunrise.jpg/1200px-Monet_-_Impression%2C_Sunrise.jpg',
-    pos: [5.95, 1.9, -2.5],
+    pos: [5.92, 1.9, -2.5],
     rot: -Math.PI/2,
     size: [1.4, 1.1],
     spotPos: [5.0, 3.8, -2.5],
@@ -808,7 +808,7 @@ const paintingData = [
     artist: 'René Magritte, 1929',
     text: 'Ceci n\'est pas une pipe. Of course it isn\'t. It\'s a painting. Pay attention.',
     url: 'https://upload.wikimedia.org/wikipedia/en/b/b9/MagrittePipe.jpg',
-    pos: [5.95, 1.6, -1.0],
+    pos: [5.92, 1.6, -1.0],
     rot: -Math.PI/2,
     size: [0.9, 0.7],
     spotPos: [5.0, 3.4, -1.0],
@@ -820,7 +820,7 @@ const paintingData = [
     artist: 'Maurizio Cattelan, 2019',
     text: '£120,000. Eaten by a performance artist at the opening. Replaced with a new banana.',
     url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/db/Comedian_2019.jpg/400px-Comedian_2019.jpg',
-    pos: [5.95, 1.1, -4.0],
+    pos: [5.92, 1.1, -4.0],
     rot: -Math.PI/2,
     size: [0.5, 0.7],
     spotPos: [5.0, 2.9, -4.0],
@@ -895,11 +895,11 @@ async function buildPaintings() {
 // ── INTRO TWEEN ──
 function startIntroTween() {
   introTween = {
-    startZ: 5.5,
-    endZ: 3.5,
-    startY: 1.9,
-    endY: 1.7,
-    duration: 2.0,
+    startZ: 5.0,
+    endZ: 3.2,
+    startY: 1.75,
+    endY: 1.65,
+    duration: 1.5,
     elapsed: 0,
     active: true
   };
