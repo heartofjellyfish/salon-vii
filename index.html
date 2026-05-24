@@ -189,12 +189,17 @@ canvas{display:block}
 </div>
 
 <!-- THREE.JS CDN -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r163/three.min.js">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
 </script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/controls/OrbitControls.js">
-</script>
-
-<script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 /* ────────────────────────────────────────────
    SALON VII — Three.js Gallery
    ──────────────────────────────────────────── */
@@ -264,7 +269,7 @@ function initThree() {
   camera.lookAt(0, 1.7, -2);
 
   // Controls
-  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 1.7, -2);
   controls.enableDamping = true;
   controls.dampingFactor = 0.06;
