@@ -1001,10 +1001,11 @@ async function init() {
   initThree();
   updateLoader(10);
 
-  // Wait for paintings to load
+  // Wait for paintings to load (max 10s timeout)
   await new Promise(resolve => {
+    const startTime = Date.now();
     const check = () => {
-      if (paintings.length >= 6) {
+      if (paintings.length >= 6 || Date.now() - startTime > 10000) {
         updateLoader(30);
         resolve();
       } else {
@@ -1016,7 +1017,15 @@ async function init() {
 
   updateLoader(5);
   animate();
-  updateLoader(10);
+  updateLoader(20);
+
+  // CRITICAL FIX: Hide loader and reveal door scene
+  setTimeout(() => {
+    loaderEl.classList.add('hidden');
+    setTimeout(() => {
+      loaderEl.style.display = 'none';
+    }, 900);
+  }, 400);
 }
 
 init();
