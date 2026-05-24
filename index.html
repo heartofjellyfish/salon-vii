@@ -347,23 +347,58 @@ function buildRoom() {
   ceiling.receiveShadow = true;
   scene.add(ceiling);
 
-  // Walls
-  const wallMat = new THREE.MeshStandardMaterial({
-    color: 0x1a2a1f,
-    roughness: 0.95,
-    metalness: 0.0
+  // Walls — Salon VII wallpaper
+  const wallpaperAlbedo = texLoader.load('public/textures/wallpaper-albedo.png',
+    () => updateLoader(10),
+    undefined,
+    () => { /* fallback to color below */ }
+  );
+  const wallpaperNormal = texLoader.load('public/textures/wallpaper-normal.png');
+  const wallpaperRoughness = texLoader.load('public/textures/wallpaper-roughness.png');
+
+  // Shared texture setup with RepeatWrapping
+  [wallpaperAlbedo, wallpaperNormal, wallpaperRoughness].forEach(tex => {
+    if (tex) {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.colorSpace = tex === wallpaperAlbedo ? THREE.SRGBColorSpace : THREE.LinearSRGBColorSpace;
+    }
   });
+
+  // Base wallpaper material
+  function createWallMat(repeatU, repeatV) {
+    const albedoClone = wallpaperAlbedo ? wallpaperAlbedo.clone() : null;
+    const normalClone = wallpaperNormal ? wallpaperNormal.clone() : null;
+    const roughClone = wallpaperRoughness ? wallpaperRoughness.clone() : null;
+    if (albedoClone) { albedoClone.repeat.set(repeatU, repeatV); albedoClone.needsUpdate = true; }
+    if (normalClone) { normalClone.repeat.set(repeatU, repeatV); normalClone.needsUpdate = true; }
+    if (roughClone) { roughClone.repeat.set(repeatU, repeatV); roughClone.needsUpdate = true; }
+
+    return new THREE.MeshStandardMaterial({
+      map: albedoClone || undefined,
+      normalMap: normalClone || undefined,
+      roughnessMap: roughClone || undefined,
+      color: albedoClone ? 0xffffff : 0x5C1822,
+      roughness: 0.7,
+      metalness: 0.0,
+      normalScale: new THREE.Vector2(1.0, 1.0)
+    });
+  }
+
+  // Tile = 2.0m × 2.0m, so repeat = wall_dimension / 2.0
+  const backMat = createWallMat(W / 2, H / 2);   // (6, 2)
+  const sideMat = createWallMat(D / 2, H / 2);   // (4, 2)
 
   // Back wall
   const backGeo = new THREE.PlaneGeometry(W, H);
-  const backWall = new THREE.Mesh(backGeo, wallMat);
+  const backWall = new THREE.Mesh(backGeo, backMat);
   backWall.position.set(0, H/2, -D/2 - D/4);
   backWall.receiveShadow = true;
   scene.add(backWall);
 
   // Left wall
   const leftGeo = new THREE.PlaneGeometry(D, H);
-  const leftWall = new THREE.Mesh(leftGeo, wallMat);
+  const leftWall = new THREE.Mesh(leftGeo, sideMat);
   leftWall.rotation.y = Math.PI / 2;
   leftWall.position.set(-W/2, H/2, -D/4);
   leftWall.receiveShadow = true;
@@ -371,7 +406,7 @@ function buildRoom() {
 
   // Right wall
   const rightGeo = new THREE.PlaneGeometry(D, H);
-  const rightWall = new THREE.Mesh(rightGeo, wallMat);
+  const rightWall = new THREE.Mesh(rightGeo, sideMat);
   rightWall.rotation.y = -Math.PI / 2;
   rightWall.position.set(W/2, H/2, -D/4);
   rightWall.receiveShadow = true;

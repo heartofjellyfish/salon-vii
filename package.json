@@ -1,0 +1,23 @@
+{
+  "name": "salon-vii",
+  "version": "1.0.0",
+  "description": "Salon VII — Digital Art Salon",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/heartofjellyfish/salon-vii.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/heartofjellyfish/salon-vii/issues"
+  },
+  "homepage": "https://github.com/heartofjellyfish/salon-vii#readme",
+  "dependencies": {
+    "canvas": "^3.2.3"
+  }
+}
