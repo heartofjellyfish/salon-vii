@@ -126,7 +126,41 @@ canvas{display:block}
   .lb-title{font-size:18px}
   .lb-text{font-size:13px}
   .door-hint{font-size:10px}
+  #camera-panel{right:4px;top:4px;width:280px;max-height:85vh;font-size:11px}
+  .cam-row label{font-size:10px}
+  .cam-row input[type=range]{width:80px}
+  .cam-row input[type=number]{width:52px;font-size:10px}
+  .cam-section-title{font-size:11px}
 }
+
+/* ── CAMERA TUNING PANEL ── */
+#camera-panel{position:fixed;top:14px;right:14px;z-index:300;width:340px;max-height:90vh;overflow-y:auto;background:rgba(8,12,9,0.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(201,168,76,0.25);border-radius:8px;padding:0;font-family:'Cormorant Garamond',serif;color:#c9a98d;font-size:13px;display:none;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+#camera-panel.visible{display:block}
+.cam-panel-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid rgba(201,168,76,0.15);position:sticky;top:0;background:rgba(8,12,9,0.96);z-index:2;border-radius:8px 8px 0 0}
+.cam-panel-header span{font-size:14px;font-weight:500;letter-spacing:0.1em;color:#c9a84c}
+.cam-panel-close{background:none;border:none;color:#c9a84c;font-size:20px;cursor:pointer;padding:0 4px;line-height:1;opacity:0.7;transition:opacity 0.2s}
+.cam-panel-close:hover{opacity:1}
+.cam-panel-body{padding:10px 14px 14px}
+.cam-section-title{font-size:12px;font-weight:500;color:#c9a84c;margin:10px 0 6px;letter-spacing:0.08em;border-top:1px solid rgba(201,168,76,0.1);padding-top:8px}
+.cam-section-title:first-child{border-top:none;padding-top:0;margin-top:0}
+.cam-row{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.cam-row label{width:42px;font-size:11px;color:#8a7a5a;text-align:right;flex-shrink:0}
+.cam-row input[type=range]{flex:1;min-width:60px;height:4px;accent-color:#c9a84c;cursor:pointer}
+.cam-row input[type=number]{width:56px;background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:3px;color:#c9a98d;font-size:11px;padding:2px 4px;text-align:center;font-family:inherit}
+.cam-row input[type=number]:focus{outline:none;border-color:#c9a84c}
+.cam-row .cam-val{width:36px;font-size:10px;color:#8a7a5a;text-align:left;flex-shrink:0}
+.cam-btn-row{display:flex;gap:8px;margin-top:12px}
+.cam-btn{flex:1;padding:7px 0;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);border-radius:4px;color:#c9a84c;font-family:inherit;font-size:12px;letter-spacing:0.05em;cursor:pointer;transition:all 0.2s}
+.cam-btn:hover{background:rgba(201,168,76,0.2);border-color:#c9a84c}
+.cam-btn.copy{background:rgba(201,168,76,0.18)}
+.cam-btn.copy:hover{background:rgba(201,168,76,0.3)}
+.cam-copied{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);color:#c9a84c;padding:10px 20px;border-radius:6px;font-family:'Cormorant Garamond',serif;font-size:14px;z-index:400;opacity:0;transition:opacity 0.3s;pointer-events:none}
+.cam-copied.show{opacity:1}
+
+/* Camera panel toggle button */
+#cam-toggle-btn{position:fixed;top:14px;right:14px;z-index:250;width:36px;height:36px;background:rgba(8,12,9,0.8);backdrop-filter:blur(8px);border:1px solid rgba(201,168,76,0.25);border-radius:6px;color:#c9a84c;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;line-height:1;padding:0}
+#cam-toggle-btn:hover{background:rgba(201,168,76,0.15);border-color:#c9a84c}
+#cam-toggle-btn.hidden{display:none}
 </style>
 </head>
 <body>
@@ -187,6 +221,61 @@ canvas{display:block}
     <p class="curator-sig">— Salon VII, Salle I</p>
   </div>
 </div>
+
+<!-- CAMERA TUNING PANEL TOGGLE -->
+<button id="cam-toggle-btn" title="Camera Tuning Panel">📷</button>
+
+<!-- CAMERA TUNING PANEL -->
+<div id="camera-panel">
+  <div class="cam-panel-header">
+    <span>📷 Camera Tuning</span>
+    <button class="cam-panel-close" id="cam-panel-close">×</button>
+  </div>
+  <div class="cam-panel-body">
+    <div class="cam-section-title">Field of View</div>
+    <div class="cam-row"><label>FOV</label><input type="range" id="cam-fov" min="20" max="90" step="1" value="42"><input type="number" id="cam-fov-num" min="20" max="90" step="1" value="42"><span class="cam-val">°</span></div>
+
+    <div class="cam-section-title">Camera Position</div>
+    <div class="cam-row"><label>X</label><input type="range" id="cam-pos-x" min="-8" max="8" step="0.05" value="0"><input type="number" id="cam-pos-x-num" min="-8" max="8" step="0.05" value="0"><span class="cam-val">m</span></div>
+    <div class="cam-row"><label>Y</label><input type="range" id="cam-pos-y" min="0.3" max="4" step="0.05" value="1.65"><input type="number" id="cam-pos-y-num" min="0.3" max="4" step="0.05" value="1.65"><span class="cam-val">m</span></div>
+    <div class="cam-row"><label>Z</label><input type="range" id="cam-pos-z" min="-2" max="10" step="0.05" value="5.0"><input type="number" id="cam-pos-z-num" min="-2" max="10" step="0.05" value="5.0"><span class="cam-val">m</span></div>
+
+    <div class="cam-section-title">Camera Target (lookAt)</div>
+    <div class="cam-row"><label>tX</label><input type="range" id="cam-target-x" min="-8" max="8" step="0.05" value="0"><input type="number" id="cam-target-x-num" min="-8" max="8" step="0.05" value="0"><span class="cam-val">m</span></div>
+    <div class="cam-row"><label>tY</label><input type="range" id="cam-target-y" min="0" max="4" step="0.05" value="1.65"><input type="number" id="cam-target-y-num" min="0" max="4" step="0.05" value="1.65"><span class="cam-val">m</span></div>
+    <div class="cam-row"><label>tZ</label><input type="range" id="cam-target-z" min="-8" max="4" step="0.05" value="-2"><input type="number" id="cam-target-z-num" min="-8" max="4" step="0.05" value="-2"><span class="cam-val">m</span></div>
+
+    <div class="cam-section-title">Orbit Limits</div>
+    <div class="cam-row"><label>minP</label><input type="range" id="cam-min-polar" min="0.1" max="1.5" step="0.01" value="0.6"><input type="number" id="cam-min-polar-num" min="0.1" max="1.5" step="0.01" value="0.6"><span class="cam-val">rad</span></div>
+    <div class="cam-row"><label>maxP</label><input type="range" id="cam-max-polar" min="0.2" max="1.57" step="0.01" value="1.2"><input type="number" id="cam-max-polar-num" min="0.2" max="1.57" step="0.01" value="1.2"><span class="cam-val">rad</span></div>
+    <div class="cam-row"><label>minA</label><input type="range" id="cam-min-azimuth" min="-1.57" max="0" step="0.01" value="-0.9"><input type="number" id="cam-min-azimuth-num" min="-1.57" max="0" step="0.01" value="-0.9"><span class="cam-val">rad</span></div>
+    <div class="cam-row"><label>maxA</label><input type="range" id="cam-max-azimuth" min="0" max="1.57" step="0.01" value="0.9"><input type="number" id="cam-max-azimuth-num" min="0" max="1.57" step="0.01" value="0.9"><span class="cam-val">rad</span></div>
+    <div class="cam-row"><label>minD</label><input type="range" id="cam-min-dist" min="0.5" max="10" step="0.1" value="1.8"><input type="number" id="cam-min-dist-num" min="0.5" max="10" step="0.1" value="1.8"><span class="cam-val">m</span></div>
+    <div class="cam-row"><label>maxD</label><input type="range" id="cam-max-dist" min="2" max="20" step="0.1" value="6"><input type="number" id="cam-max-dist-num" min="2" max="20" step="0.1" value="6"><span class="cam-val">m</span></div>
+
+    <div class="cam-section-title">Damping</div>
+    <div class="cam-row"><label>damp</label><input type="range" id="cam-damping" min="0.04" max="0.4" step="0.01" value="0.12"><input type="number" id="cam-damping-num" min="0.04" max="0.4" step="0.01" value="0.12"><span class="cam-val"></span></div>
+
+    <div class="cam-section-title">Intro Tween</div>
+    <div class="cam-row"><label>startZ</label><input type="range" id="cam-tween-sz" min="1" max="12" step="0.1" value="5.0"><input type="number" id="cam-tween-sz-num" min="1" max="12" step="0.1" value="5.0"><span class="cam-val">m</span></div>
+    <div class="cam-row"><label>endZ</label><input type="range" id="cam-tween-ez" min="0.5" max="10" step="0.1" value="3.2"><input type="number" id="cam-tween-ez-num" min="0.5" max="10" step="0.1" value="3.2"><span class="cam-val">m</span></div>
+    <div class="cam-row"><label>startY</label><input type="range" id="cam-tween-sy" min="0.3" max="4" step="0.05" value="1.75"><input type="number" id="cam-tween-sy-num" min="0.3" max="4" step="0.05" value="1.75"><span class="cam-val">m</span></div>
+    <div class="cam-row"><label>endY</label><input type="range" id="cam-tween-ey" min="0.3" max="4" step="0.05" value="1.65"><input type="number" id="cam-tween-ey-num" min="0.3" max="4" step="0.05" value="1.65"><span class="cam-val">m</span></div>
+    <div class="cam-row"><label>dur</label><input type="range" id="cam-tween-dur" min="0.3" max="5" step="0.1" value="1.5"><input type="number" id="cam-tween-dur-num" min="0.3" max="5" step="0.1" value="1.5"><span class="cam-val">s</span></div>
+
+    <div class="cam-btn-row">
+      <button class="cam-btn" id="cam-reset-btn">↺ Reset</button>
+      <button class="cam-btn copy" id="cam-copy-btn">📋 Copy Config</button>
+    </div>
+    <div class="cam-btn-row">
+      <button class="cam-btn" id="cam-preset-front">Front View</button>
+      <button class="cam-btn" id="cam-preset-close">Close Detail</button>
+    </div>
+  </div>
+</div>
+
+<!-- COPIED TOAST -->
+<div class="cam-copied" id="cam-copied-toast">✓ Camera config copied to clipboard</div>
 
 <!-- THREE.JS CDN -->
 <script type="importmap">
@@ -1064,6 +1153,230 @@ async function init() {
 }
 
 init();
+
+// ───────────────────────────────
+// CAMERA TUNING PANEL
+// ───────────────────────────────
+const camPanel = document.getElementById('camera-panel');
+const camToggleBtn = document.getElementById('cam-toggle-btn');
+let camPanelVisible = false;
+
+// Toggle panel
+function toggleCamPanel() {
+  camPanelVisible = !camPanelVisible;
+  camPanel.classList.toggle('visible', camPanelVisible);
+  camToggleBtn.classList.toggle('hidden', camPanelVisible);
+}
+
+camToggleBtn.addEventListener('click', toggleCamPanel);
+document.getElementById('cam-panel-close').addEventListener('click', toggleCamPanel);
+
+// Keyboard shortcut: press C to toggle
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'c' && !e.target.closest('input') && doorOpen) {
+    toggleCamPanel();
+  }
+});
+
+// Default config for reset
+const CAM_DEFAULTS = {
+  fov: 42,
+  posX: 0, posY: 1.65, posZ: 5.0,
+  targetX: 0, targetY: 1.65, targetZ: -2,
+  minPolar: 0.6, maxPolar: 1.2,
+  minAzimuth: -0.9, maxAzimuth: 0.9,
+  minDist: 1.8, maxDist: 6,
+  damping: 0.12,
+  tweenSZ: 5.0, tweenEZ: 3.2,
+  tweenSY: 1.75, tweenEY: 1.65,
+  tweenDur: 1.5
+};
+
+// Bind slider ↔ number input pairs
+function bindSliderPair(sliderId, numId, onChange) {
+  const slider = document.getElementById(sliderId);
+  const num = document.getElementById(numId);
+  if (!slider || !num) return;
+
+  let updating = false;
+  slider.addEventListener('input', () => {
+    if (updating) return;
+    updating = true;
+    num.value = parseFloat(slider.value);
+    updating = false;
+    if (onChange) onChange(parseFloat(slider.value));
+  });
+  num.addEventListener('change', () => {
+    if (updating) return;
+    updating = true;
+    const v = parseFloat(num.value);
+    if (!isNaN(v)) {
+      slider.value = v;
+      if (onChange) onChange(v);
+    }
+    updating = false;
+  });
+}
+
+// Apply camera position
+function applyCamPos(x, y, z) {
+  camera.position.set(x, y, z);
+}
+
+// Apply camera target
+function applyCamTarget(x, y, z) {
+  controls.target.set(x, y, z);
+  controls.update();
+}
+
+// Get current config as object
+function getCamConfig() {
+  return {
+    fov: parseFloat(document.getElementById('cam-fov').value),
+    posX: parseFloat(document.getElementById('cam-pos-x').value),
+    posY: parseFloat(document.getElementById('cam-pos-y').value),
+    posZ: parseFloat(document.getElementById('cam-pos-z').value),
+    targetX: parseFloat(document.getElementById('cam-target-x').value),
+    targetY: parseFloat(document.getElementById('cam-target-y').value),
+    targetZ: parseFloat(document.getElementById('cam-target-z').value),
+    minPolar: parseFloat(document.getElementById('cam-min-polar').value),
+    maxPolar: parseFloat(document.getElementById('cam-max-polar').value),
+    minAzimuth: parseFloat(document.getElementById('cam-min-azimuth').value),
+    maxAzimuth: parseFloat(document.getElementById('cam-max-azimuth').value),
+    minDist: parseFloat(document.getElementById('cam-min-dist').value),
+    maxDist: parseFloat(document.getElementById('cam-max-dist').value),
+    damping: parseFloat(document.getElementById('cam-damping').value),
+    tweenSZ: parseFloat(document.getElementById('cam-tween-sz').value),
+    tweenEZ: parseFloat(document.getElementById('cam-tween-ez').value),
+    tweenSY: parseFloat(document.getElementById('cam-tween-sy').value),
+    tweenEY: parseFloat(document.getElementById('cam-tween-ey').value),
+    tweenDur: parseFloat(document.getElementById('cam-tween-dur').value)
+  };
+}
+
+// Set all controls from config object
+function setCamConfig(cfg) {
+  const pairs = [
+    ['cam-fov', 'cam-fov-num', cfg.fov],
+    ['cam-pos-x', 'cam-pos-x-num', cfg.posX],
+    ['cam-pos-y', 'cam-pos-y-num', cfg.posY],
+    ['cam-pos-z', 'cam-pos-z-num', cfg.posZ],
+    ['cam-target-x', 'cam-target-x-num', cfg.targetX],
+    ['cam-target-y', 'cam-target-y-num', cfg.targetY],
+    ['cam-target-z', 'cam-target-z-num', cfg.targetZ],
+    ['cam-min-polar', 'cam-min-polar-num', cfg.minPolar],
+    ['cam-max-polar', 'cam-max-polar-num', cfg.maxPolar],
+    ['cam-min-azimuth', 'cam-min-azimuth-num', cfg.minAzimuth],
+    ['cam-max-azimuth', 'cam-max-azimuth-num', cfg.maxAzimuth],
+    ['cam-min-dist', 'cam-min-dist-num', cfg.minDist],
+    ['cam-max-dist', 'cam-max-dist-num', cfg.maxDist],
+    ['cam-damping', 'cam-damping-num', cfg.damping],
+    ['cam-tween-sz', 'cam-tween-sz-num', cfg.tweenSZ],
+    ['cam-tween-ez', 'cam-tween-ez-num', cfg.tweenEZ],
+    ['cam-tween-sy', 'cam-tween-sy-num', cfg.tweenSY],
+    ['cam-tween-ey', 'cam-tween-ey-num', cfg.tweenEY],
+    ['cam-tween-dur', 'cam-tween-dur-num', cfg.tweenDur]
+  ];
+  pairs.forEach(([sid, nid, val]) => {
+    const s = document.getElementById(sid);
+    const n = document.getElementById(nid);
+    if (s) s.value = val;
+    if (n) n.value = val;
+  });
+  // Apply camera + controls
+  camera.fov = cfg.fov;
+  camera.updateProjectionMatrix();
+  camera.position.set(cfg.posX, cfg.posY, cfg.posZ);
+  controls.target.set(cfg.targetX, cfg.targetY, cfg.targetZ);
+  controls.minPolarAngle = cfg.minPolar;
+  controls.maxPolarAngle = cfg.maxPolar;
+  controls.minAzimuthAngle = cfg.minAzimuth;
+  controls.maxAzimuthAngle = cfg.maxAzimuth;
+  controls.minDistance = cfg.minDist;
+  controls.maxDistance = cfg.maxDist;
+  controls.dampingFactor = cfg.damping;
+  controls.update();
+}
+
+// Wire all bindings
+bindSliderPair('cam-fov', 'cam-fov-num', (v) => { camera.fov = v; camera.updateProjectionMatrix(); });
+bindSliderPair('cam-pos-x', 'cam-pos-x-num', (v) => { camera.position.x = v; });
+bindSliderPair('cam-pos-y', 'cam-pos-y-num', (v) => { camera.position.y = v; });
+bindSliderPair('cam-pos-z', 'cam-pos-z-num', (v) => { camera.position.z = v; });
+bindSliderPair('cam-target-x', 'cam-target-x-num', (v) => { controls.target.x = v; controls.update(); });
+bindSliderPair('cam-target-y', 'cam-target-y-num', (v) => { controls.target.y = v; controls.update(); });
+bindSliderPair('cam-target-z', 'cam-target-z-num', (v) => { controls.target.z = v; controls.update(); });
+bindSliderPair('cam-min-polar', 'cam-min-polar-num', (v) => { controls.minPolarAngle = v; });
+bindSliderPair('cam-max-polar', 'cam-max-polar-num', (v) => { controls.maxPolarAngle = v; });
+bindSliderPair('cam-min-azimuth', 'cam-min-azimuth-num', (v) => { controls.minAzimuthAngle = v; });
+bindSliderPair('cam-max-azimuth', 'cam-max-azimuth-num', (v) => { controls.maxAzimuthAngle = v; });
+bindSliderPair('cam-min-dist', 'cam-min-dist-num', (v) => { controls.minDistance = v; });
+bindSliderPair('cam-max-dist', 'cam-max-dist-num', (v) => { controls.maxDistance = v; });
+bindSliderPair('cam-damping', 'cam-damping-num', (v) => { controls.dampingFactor = v; });
+
+// Tween params don't update live (only used on next door open), but we keep sliders for copy
+
+// Copy config to clipboard
+document.getElementById('cam-copy-btn').addEventListener('click', () => {
+  const cfg = getCamConfig();
+  const text = `Camera Config:
+  FOV: ${cfg.fov}
+  Position: (${cfg.posX}, ${cfg.posY}, ${cfg.posZ})
+  Target: (${cfg.targetX}, ${cfg.targetY}, ${cfg.targetZ})
+  Orbit Limits:
+    minPolarAngle: ${cfg.minPolar}
+    maxPolarAngle: ${cfg.maxPolar}
+    minAzimuthAngle: ${cfg.minAzimuth}
+    maxAzimuthAngle: ${cfg.maxAzimuth}
+    minDistance: ${cfg.minDist}
+    maxDistance: ${cfg.maxDist}
+  dampingFactor: ${cfg.damping}
+  Intro Tween:
+    startZ: ${cfg.tweenSZ}, endZ: ${cfg.tweenEZ}
+    startY: ${cfg.tweenSY}, endY: ${cfg.tweenEY}
+    duration: ${cfg.tweenDur}`;
+  navigator.clipboard.writeText(text).then(() => {
+    const toast = document.getElementById('cam-copied-toast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
+  });
+});
+
+// Reset to defaults
+document.getElementById('cam-reset-btn').addEventListener('click', () => {
+  setCamConfig(CAM_DEFAULTS);
+});
+
+// Presets
+document.getElementById('cam-preset-front').addEventListener('click', () => {
+  setCamConfig({
+    fov: 42,
+    posX: 0, posY: 1.65, posZ: 5.0,
+    targetX: 0, targetY: 1.65, targetZ: -2,
+    minPolar: 0.6, maxPolar: 1.2,
+    minAzimuth: -0.9, maxAzimuth: 0.9,
+    minDist: 1.8, maxDist: 6,
+    damping: 0.12,
+    tweenSZ: 5.0, tweenEZ: 3.2,
+    tweenSY: 1.75, tweenEY: 1.65,
+    tweenDur: 1.5
+  });
+});
+
+document.getElementById('cam-preset-close').addEventListener('click', () => {
+  setCamConfig({
+    fov: 30,
+    posX: 0, posY: 1.65, posZ: 1.8,
+    targetX: 0, targetY: 1.9, targetZ: -4,
+    minPolar: 0.5, maxPolar: 1.3,
+    minAzimuth: -0.5, maxAzimuth: 0.5,
+    minDist: 0.8, maxDist: 4,
+    damping: 0.08,
+    tweenSZ: 5.0, tweenEZ: 3.2,
+    tweenSY: 1.75, tweenEY: 1.65,
+    tweenDur: 1.5
+  });
+});
 </script>
 </body>
 </html>
