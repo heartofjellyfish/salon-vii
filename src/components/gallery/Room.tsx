@@ -1,6 +1,8 @@
 "use client";
 
-import { useRef } from "react";
+import { useMemo } from "react";
+import { useTexture } from "@react-three/drei";
+import * as THREE from "three";
 
 const W = 12, H = 4, D = 8;
 const HALF_W = W / 2;
@@ -8,13 +10,47 @@ const BACK_Z = -HALF_W;  // -6 (north wall)
 const FRONT_Z = BACK_Z + D; // 2 (south wall)
 const ROOM_CENTER_Z = (BACK_Z + FRONT_Z) / 2;
 
+// Wallpaper motif tile size in meters. Source image is 1600×1200 (4:3),
+// so width/height stay in that ratio to keep the pattern undistorted.
+const TILE_H = 1.5;
+const TILE_W = TILE_H * (1600 / 1200); // 2.0m
+
+// Clone the shared wallpaper so each wall can tile at a constant physical
+// size — texture.repeat is per-texture, and the walls have different widths.
+function tiledClone(base: THREE.Texture, repeatX: number, repeatY: number) {
+  const t = base.clone();
+  t.wrapS = THREE.RepeatWrapping;
+  t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeatX, repeatY);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  t.needsUpdate = true;
+  return t;
+}
+
 export default function Room() {
+  const wallpaper = useTexture("/textures/wallpaper.jpg");
+  const wood = useTexture("/textures/floor-wood.jpg");
+
+  const wideWall = useMemo(() => tiledClone(wallpaper, W / TILE_W, H / TILE_H), [wallpaper]);
+  const sideWall = useMemo(() => tiledClone(wallpaper, D / TILE_W, H / TILE_H), [wallpaper]);
+
+  const floorTex = useMemo(() => {
+    wood.wrapS = THREE.RepeatWrapping;
+    wood.wrapT = THREE.RepeatWrapping;
+    wood.repeat.set(5, 5);
+    wood.colorSpace = THREE.SRGBColorSpace;
+    wood.anisotropy = 8;
+    wood.needsUpdate = true;
+    return wood;
+  }, [wood]);
+
   return (
     <group>
-      {/* Floor */}
+      {/* Floor — wood parquet */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, ROOM_CENTER_Z]} receiveShadow>
         <planeGeometry args={[W, D]} />
-        <meshStandardMaterial color="#3a2818" roughness={0.7} />
+        <meshStandardMaterial map={floorTex} roughness={0.7} metalness={0} />
       </mesh>
 
       {/* Ceiling */}
@@ -26,25 +62,25 @@ export default function Room() {
       {/* Back wall (north) */}
       <mesh position={[0, H / 2, BACK_Z]} receiveShadow>
         <planeGeometry args={[W, H]} />
-        <meshStandardMaterial color="#5C1822" roughness={0.8} />
+        <meshStandardMaterial map={wideWall} roughness={0.85} />
       </mesh>
 
       {/* Front wall (south) */}
       <mesh position={[0, H / 2, FRONT_Z]} rotation={[0, Math.PI, 0]}>
         <planeGeometry args={[W, H]} />
-        <meshStandardMaterial color="#5C1822" roughness={0.8} />
+        <meshStandardMaterial map={wideWall} roughness={0.85} />
       </mesh>
 
       {/* Left wall (west) */}
       <mesh position={[-HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[D, H]} />
-        <meshStandardMaterial color="#5C1822" roughness={0.8} />
+        <meshStandardMaterial map={sideWall} roughness={0.85} />
       </mesh>
 
       {/* Right wall (east) */}
       <mesh position={[HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[D, H]} />
-        <meshStandardMaterial color="#5C1822" roughness={0.8} />
+        <meshStandardMaterial map={sideWall} roughness={0.85} />
       </mesh>
 
       {/* Baseboard */}

@@ -38,7 +38,9 @@ function SceneContent({ artworks, mode, onArtworkRevealed, onArtworkClick, satur
       <color attach="background" args={["#0a0508"]} />
       <ambientLight intensity={0.08} color="#1a0f05" />
       <hemisphereLight args={["#3A0A10", "#0A0508", 0.12]} />
-      <Room />
+      <Suspense fallback={null}>
+        <Room />
+      </Suspense>
       <Suspense fallback={null}>
         {artworks.map((artwork, index) => (
           <Painting

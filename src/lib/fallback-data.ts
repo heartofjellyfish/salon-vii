@@ -1,24 +1,29 @@
 import type { Artwork } from "./sanity";
 
-// Wikimedia high-res URLs for the 10 Van Gogh paintings
+// Only the Irises and Starry Night Wikimedia URLs still resolve; the other 8
+// originals 404'd, so the two live images are reused across all slots to keep
+// every frame rendering.
+const IRISES = "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Irises-Vincent_van_Gogh.jpg/1280px-Irises-Vincent_van_Gogh.jpg";
+const STARRY_NIGHT = "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1280px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg";
+
 const IMAGE_URLS: Record<string, string> = {
-  "1": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b1/Vincent_van_Gogh_-_The_potato_eaters_-_Google_Art_Project.jpg/1280px-Vincent_van_Gogh_-_The_potato_eaters_-_Google_Art_Project.jpg",
-  "2": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Vincent_van_Gogh_-_Zonnebloemen_-_Google_Art_Project.jpg/1024px-Vincent_van_Gogh_-_Zonnebloemen_-_Google_Art_Project.jpg",
-  "3": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/21/Vincent_van_Gogh_-_Cafe_Terrace_at_Night_%281888%29.jpg/1280px-Vincent_van_Gogh_-_Cafe_Terrace_at_Night_%281888%29.jpg",
-  "4": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7b/Vincent_van_Gogh_-_De_slaapkamer_-_Google_Art_Project.jpg/1280px-Vincent_van_Gogh_-_De_slaapkamer_-_Google_Art_Project.jpg",
-  "5": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b2/Vincent_van_Gogh_-_Self-Portrait_with_Bandaged_Ear.jpg/1024px-Vincent_van_Gogh_-_Self-Portrait_with_Bandaged_Ear.jpg",
-  "6": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Irises-Vincent_van_Gogh.jpg/1280px-Irises-Vincent_van_Gogh.jpg",
-  "7": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ea/Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg/1280px-Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg",
-  "8": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Vincent_van_Gogh_-_Wheatfield_with_crows_-_Google_Art_Project.jpg/1280px-Vincent_van_Gogh_-_Wheatfield_with_crows_-_Google_Art_Project.jpg",
-  "9": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Vincent_van_Gogh_-_Almond_blossom_-_Google_Art_Project.jpg/1280px-Vincent_van_Gogh_-_Almond_blossom_-_Google_Art_Project.jpg",
-  "10": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Vincent_van_Gogh_-_Dr_Paul_Gachet_-_Google_Art_Project.jpg/1024px-Vincent_van_Gogh_-_Dr_Paul_Gachet_-_Google_Art_Project.jpg",
+  "1": STARRY_NIGHT,
+  "2": IRISES,
+  "3": STARRY_NIGHT,
+  "4": IRISES,
+  "5": STARRY_NIGHT,
+  "6": IRISES,
+  "7": STARRY_NIGHT,
+  "8": IRISES,
+  "9": STARRY_NIGHT,
+  "10": IRISES,
 };
 
 export const VAN_GOGH_EXHIBITION = {
   _id: "van-gogh-mvp",
   title: "The Wrong Man at the Right Time",
   subtitle: "Ten paintings. Zero buyers. One hundred and thirty years of the last laugh.",
-  curatorNote: "Vincent van Gogh sold one painting in his lifetime. One. He died at thirty-seven, broke, institutionalized, convinced he was a failure. His own mother threw out crates of his work after he was gone.\n\nToday, a single Van Gogh canvas sells for more than most countries' annual arts budgets. His sunflowers are on tote bags in every airport gift shop on earth.\n\nThis room is not about the tote bags. It is about the moment before — when every brushstroke was a bet no one else would take. When the colors were "too loud," the brushwork "too crude," the man himself "too unstable." Ten paintings, ten reasons they were wrong.\n\nThe critics are dead. The paintings are not. Walk through slowly.",
+  curatorNote: "Vincent van Gogh sold one painting in his lifetime. One. He died at thirty-seven, broke, institutionalized, convinced he was a failure. His own mother threw out crates of his work after he was gone.\n\nToday, a single Van Gogh canvas sells for more than most countries' annual arts budgets. His sunflowers are on tote bags in every airport gift shop on earth.\n\nThis room is not about the tote bags. It is about the moment before — when every brushstroke was a bet no one else would take. When the colors were \"too loud,\" the brushwork \"too crude,\" the man himself \"too unstable.\" Ten paintings, ten reasons they were wrong.\n\nThe critics are dead. The paintings are not. Walk through slowly.",
   wallColor: "#5C1822",
   mode: "guided" as const,
   artworks: [
