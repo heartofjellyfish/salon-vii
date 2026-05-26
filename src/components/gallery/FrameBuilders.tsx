@@ -16,7 +16,7 @@ interface FrameProps {
 // reflection without touching the room's tuned lighting. Cached per renderer.
 let _envMap: THREE.Texture | null = null;
 let _envTried = false;
-function getFrameEnvMap(gl: THREE.WebGLRenderer): THREE.Texture | null {
+export function getFrameEnvMap(gl: THREE.WebGLRenderer): THREE.Texture | null {
   if (_envTried) return _envMap;
   _envTried = true;
   try {
@@ -337,7 +337,7 @@ export interface FrameTexture {
   edgeColor?: number; // side-wall colour
 }
 export const FRAME_TEXTURES: Record<string, FrameTexture> = {
-  baroque_gold: { url: "/frames/f2-avantrend233.png", normalUrl: "/frames/f2-normal.png", frameWidth: 0.13, depth: 0.05, edgeColor: 0xa6823c }, // ornate Baroque gilt (cut-out PNG)
+  baroque_gold: { url: "/frames/f2-baroque.png", normalUrl: "/frames/f2-baroque-normal.png", frameWidth: 0.13, depth: 0.05, edgeColor: 0xa6823c }, // ornate Baroque gilt (AI-cleaned, straight-on)
   raw_wood: { url: "/frames/f3-anaterate.png", normalUrl: "/frames/f3-normal.png", frameWidth: 0.11, depth: 0.05, edgeColor: 0x6a4f2c }, // rustic bronze/wood, rope molding
   copper_slim: { url: "/frames/f4-susannp4.png", normalUrl: "/frames/f4-normal.png", frameWidth: 0.075, depth: 0.035, edgeColor: 0x9c7a38 }, // simple slim gilt
 };
