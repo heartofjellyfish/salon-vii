@@ -147,7 +147,7 @@ export default function GalleryPage() {
   // intercepting nothing-events and is gone for good.
   useEffect(() => {
     if (!ready) return;
-    const t = setTimeout(() => setOverlayGone(true), 2700);
+    const t = setTimeout(() => setOverlayGone(true), 3000);
     return () => clearTimeout(t);
   }, [ready]);
 
@@ -296,21 +296,46 @@ export default function GalleryPage() {
         />
       )}
 
-      {/* Scene transition — a plain black curtain that holds until every asset
-          is ready, then fades to reveal the fully-formed room. No copy: loading
-          is fast enough that text would only flash. */}
+      {/* Scene transition — an "eyes opening" reveal. The black curtain carries a
+          soft circular hole at its centre; once everything's ready the hole irises
+          open (mask-size grows), so the room becomes visible from the middle
+          outward. A warm sliver of light blooms in the centre first, then
+          dissolves as sight fills in. */}
       {!overlayGone && (
-        <div
-          style={{
-            position: "fixed", inset: 0, zIndex: 400, background: "#060309",
-            opacity: ready ? 0 : 1,
-            // Slow, eyes-opening brightening: lingers in the dark, then the light
-            // wells up and settles into the room.
-            transition: "opacity 2.6s cubic-bezier(0.45,0,0.25,1)",
-            pointerEvents: ready ? "none" : "auto",
-          }}
-        />
+        <>
+          <div
+            style={{
+              position: "fixed", inset: 0, zIndex: 400, background: "#060309",
+              WebkitMaskImage: "radial-gradient(circle at 50% 50%, transparent 0%, transparent 36%, #000 60%)",
+              maskImage: "radial-gradient(circle at 50% 50%, transparent 0%, transparent 36%, #000 60%)",
+              WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat",
+              WebkitMaskPosition: "center", maskPosition: "center",
+              WebkitMaskSize: ready ? "320% 320%" : "1.5% 1.5%",
+              maskSize: ready ? "320% 320%" : "1.5% 1.5%",
+              transition: "-webkit-mask-size 2.8s cubic-bezier(0.4,0,0.2,1), mask-size 2.8s cubic-bezier(0.4,0,0.2,1)",
+              pointerEvents: ready ? "none" : "auto",
+            }}
+          />
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 401, pointerEvents: "none",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <div style={{
+              width: "46vmin", height: "46vmin", borderRadius: "50%",
+              background: "radial-gradient(circle, rgba(255,228,184,0.6), rgba(255,198,122,0.16) 46%, transparent 72%)",
+              opacity: 0,
+              animation: ready ? "sv-bloom 2.8s cubic-bezier(0.4,0,0.2,1) both" : "none",
+            }} />
+          </div>
+        </>
       )}
+      <style jsx global>{`
+        @keyframes sv-bloom {
+          0%   { opacity: 0; transform: scale(0.4); }
+          22%  { opacity: 1; transform: scale(0.8); }
+          100% { opacity: 0; transform: scale(2.4); }
+        }
+      `}</style>
 
       {/* Curator Panel */}
       <div style={{
