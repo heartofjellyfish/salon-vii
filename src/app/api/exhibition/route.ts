@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { VAN_GOGH_EXHIBITION } from "@/lib/fallback-data";
-import { sanityClient } from "@/lib/sanity";
+import { sanityClient, urlFor } from "@/lib/sanity";
 
 export async function GET() {
   try {
@@ -14,12 +14,13 @@ export async function GET() {
     }`);
 
     if (exhibition?.artworks?.length > 0) {
-      // Add image URLs from Sanity CDN
+      // Build Sanity CDN image URLs via the configured client (projectId/dataset
+      // fall back to the hardcoded values, so this works even when the
+      // NEXT_PUBLIC_SANITY_* env vars aren't set on the host). Resize to a
+      // sane width so huge uploads don't blow up the WebGL texture.
       const artworks = exhibition.artworks.map((a: any) => ({
         ...a,
-        imageUrl: a.image?.asset
-          ? `https://cdn.sanity.io/images/${process.env.NEXT_PUBLIC_SANITY_PROJECT_ID}/${process.env.NEXT_PUBLIC_SANITY_DATASET}/${a.image.asset._ref.replace('image-', '').replace('-jpg', '.jpg').replace('-png', '.png')}`
-          : null,
+        imageUrl: a.image?.asset ? urlFor(a.image).width(1600).auto("format").url() : null,
       }));
       return NextResponse.json({ ...exhibition, artworks });
     }

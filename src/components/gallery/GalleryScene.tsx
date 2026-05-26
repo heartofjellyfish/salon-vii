@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
@@ -47,6 +47,18 @@ function buildAnchors(artworks: Artwork[]): { anchors: Anchor[]; start: number }
   let start = items.findIndex((i) => i.isCenterNorth);
   if (start < 0) start = Math.floor(items.length / 2);
   return { anchors: items.map((i) => ({ camPos: i.camPos, fwd: i.fwd })), start };
+}
+
+// If one painting's texture fails to load, skip just that painting instead of
+// letting the thrown load error crash the whole gallery.
+class PaintingBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
 }
 
 // Keep tone-mapping exposure in sync with the active preset (updates on hot reload).
@@ -170,15 +182,16 @@ function SceneContent({ artworks, mode, onArtworkRevealed, onArtworkClick, satur
       </Suspense>
       <Suspense fallback={null}>
         {artworks.map((artwork, index) => (
-          <Painting
-            key={artwork._id}
-            artwork={artwork}
-            index={index}
-            saturationRefs={saturationRefs}
-            mode={mode}
-            onReveal={onArtworkRevealed}
-            onClick={onArtworkClick}
-          />
+          <PaintingBoundary key={artwork._id}>
+            <Painting
+              artwork={artwork}
+              index={index}
+              saturationRefs={saturationRefs}
+              mode={mode}
+              onReveal={onArtworkRevealed}
+              onClick={onArtworkClick}
+            />
+          </PaintingBoundary>
         ))}
       </Suspense>
     </>
