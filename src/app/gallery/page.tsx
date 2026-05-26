@@ -328,8 +328,39 @@ export default function GalleryPage() {
             transition: "transform 2.6s cubic-bezier(0.5,0,0.2,1)",
             pointerEvents: ready ? "none" : "auto",
           }} />
+          {/* Faint film grain over the black — a quiet shimmer (plus a slow
+              exposure flicker) so the hold reads as "the show is loading up,"
+              like the black before an old film, not a frozen screen. Outer div
+              fades the whole thing out as the lids open; inner div carries the
+              grain + flicker (nested opacities multiply). */}
+          <div style={{
+            position: "fixed", inset: 0, zIndex: 401, pointerEvents: "none",
+            opacity: ready ? 0 : 1, transition: "opacity 0.9s ease",
+          }}>
+            <div style={{
+              position: "absolute", inset: 0,
+              backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0.7 0 0 0 -0.32'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+              backgroundSize: "200px 200px",
+              animation: "sv-grain 0.45s steps(4) infinite, sv-flickerexp 5.5s ease-in-out infinite",
+            }} />
+          </div>
         </>
       )}
+      <style jsx global>{`
+        @keyframes sv-grain {
+          0%   { background-position: 0px 0px; }
+          25%  { background-position: -42px 28px; }
+          50%  { background-position: 30px -46px; }
+          75%  { background-position: -24px -20px; }
+          100% { background-position: 36px 26px; }
+        }
+        @keyframes sv-flickerexp {
+          0%, 100% { opacity: 0.42; }
+          18%      { opacity: 0.30; }
+          45%      { opacity: 0.52; }
+          70%      { opacity: 0.36; }
+        }
+      `}</style>
 
       {/* Curator Panel */}
       <div style={{
