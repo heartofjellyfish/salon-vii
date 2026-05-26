@@ -1,27 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 export default function HomePage() {
   const [entering, setEntering] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [progress, setProgress] = useState(0);
   const router = useRouter();
-
-  useEffect(() => {
-    let p = 0;
-    const interval = setInterval(() => {
-      p += Math.random() * 15;
-      if (p >= 100) {
-        p = 100;
-        clearInterval(interval);
-        setTimeout(() => setLoading(false), 400);
-      }
-      setProgress(Math.min(p, 100));
-    }, 200);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleEnter = useCallback(() => {
     if (entering) return;
@@ -33,26 +17,6 @@ export default function HomePage() {
 
   return (
     <>
-      {/* Loading Screen */}
-      {loading && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 1000,
-          background: "radial-gradient(ellipse at center, #5a2926 0%, #2e1413 75%)",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          transition: "opacity 0.8s ease-out",
-        }}>
-          <div style={{ fontSize: "clamp(28px,5vw,48px)", fontWeight: 400, letterSpacing: "0.4em", color: "#f0e6d8", marginBottom: 10 }}>
-            SALON VII
-          </div>
-          <div style={{ fontSize: "clamp(11px,1.8vw,15px)", fontWeight: 300, fontStyle: "italic", color: "rgba(240,230,216,0.6)", marginBottom: 42, textAlign: "center", padding: "0 20px" }}>
-            Salle I — The Wrong Man at the Right Time
-          </div>
-          <div style={{ width: "clamp(160px,30vw,260px)", height: 2, background: "rgba(240,230,216,0.15)", borderRadius: 1, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${progress}%`, background: "linear-gradient(90deg, #d9c4a0, #c9a84c)", transition: "width 0.3s ease", borderRadius: 1 }} />
-          </div>
-        </div>
-      )}
-
       {/* Exhibition intro wall */}
       <div
         style={{
@@ -154,15 +118,6 @@ export default function HomePage() {
                 overflow: "hidden",
               }}
             >
-              {/* hint of a framed painting deep inside */}
-              <div style={{
-                position: "absolute", top: "30%", left: "50%", transform: "translateX(-50%)",
-                width: "44%", height: "26%",
-                background: "linear-gradient(135deg, #3a2d22, #241a12)",
-                border: "3px solid rgba(150,118,70,0.35)", borderRadius: 2,
-                boxShadow: "0 0 18px rgba(0,0,0,0.6)", filter: "blur(0.6px)", opacity: 0.7,
-              }} />
-
               {/* warm floor light leaking from the next room */}
               <div style={{
                 position: "absolute", bottom: 0, left: 0, right: 0, height: "32%",
