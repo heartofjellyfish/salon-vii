@@ -3,7 +3,7 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { NineSliceFrame, NineSliceFrameFromURL, getPlaceholderFrameTexture } from "./NineSliceFrame";
+import { NineSliceFrameFromURL } from "./NineSliceFrame";
 
 interface FrameProps {
   pw: number;
@@ -334,22 +334,17 @@ export interface FrameTexture {
   rebate?: number;
 }
 export const FRAME_TEXTURES: Record<string, FrameTexture> = {
-  // baroque_gold: { url: "/frames/gilt-01.png", frameWidth: 0.1 },
-  // raw_wood: { url: "/frames/wood-01.png", frameWidth: 0.07 },
+  baroque_gold: { url: "/frames/f2-avantrend233.jpg", frameWidth: 0.13 }, // ornate Baroque gilt
+  raw_wood: { url: "/frames/f3-anaterate.png", frameWidth: 0.11 }, // rustic bronze/wood, rope molding
+  copper_slim: { url: "/frames/f4-susannp4.png", frameWidth: 0.075 }, // simple slim gilt
 };
 
-// Toggle on to preview the 9-slice mechanism with a generated placeholder frame
-// (no real image needed). Set back to false once real textures are wired up.
-const DEMO_NINE_SLICE = true;
+// Every painting gets a photographic frame: mapped by frameStyle, else the clean
+// simple gilt (which stretches best for unknown aspect ratios). The procedural
+// molding (BaroqueGoldFrame etc.) stays as a code-level fallback only.
+const DEFAULT_FRAME: FrameTexture = { url: "/frames/f4-susannp4.png", frameWidth: 0.085 };
 
 export function FrameGroup({ frameStyle, pw, ph }: { frameStyle: string; pw: number; ph: number }) {
-  if (DEMO_NINE_SLICE) {
-    return <NineSliceFrame texture={getPlaceholderFrameTexture()} pw={pw} ph={ph} frameWidth={0.1} />;
-  }
-  const tex = FRAME_TEXTURES[frameStyle];
-  if (tex) {
-    return <NineSliceFrameFromURL url={tex.url} pw={pw} ph={ph} frameWidth={tex.frameWidth} rebate={tex.rebate} />;
-  }
-  const spec = FRAME_SPECS[frameStyle] ?? BAROQUE_GOLD;
-  return <MoldingFrame pw={pw} ph={ph} spec={spec} />;
+  const tex = FRAME_TEXTURES[frameStyle] ?? DEFAULT_FRAME;
+  return <NineSliceFrameFromURL url={tex.url} pw={pw} ph={ph} frameWidth={tex.frameWidth} rebate={tex.rebate} />;
 }

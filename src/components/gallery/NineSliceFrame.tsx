@@ -13,9 +13,9 @@ interface Slice {
   vTop: number; // opening top    (V)
 }
 
-// Find the frame's opening by the bounding box of the transparent centre. Works
-// only for same-origin images (our /public assets). Returns null if the image
-// has no transparent region (e.g. a flat JPG) — caller should pass insets then.
+// Find the frame's opening. Tries the transparent centre first (PNG with alpha),
+// then falls back to a near-white centre (flat JPG) by expanding outward from the
+// image centre until it hits the frame. Same-origin images only (/public assets).
 function detectOpening(img: HTMLImageElement): Slice | null {
   const W = img.naturalWidth || img.width;
   const H = img.naturalHeight || img.height;
@@ -32,6 +32,12 @@ function detectOpening(img: HTMLImageElement): Slice | null {
   } catch {
     return null; // tainted canvas
   }
+  const at = (x: number, y: number) => {
+    const i = (y * W + x) * 4;
+    return { r: data[i], g: data[i + 1], b: data[i + 2], a: data[i + 3] };
+  };
+
+  // 1) transparent centre → global bbox of alpha<40 pixels
   let minX = W,
     minY = H,
     maxX = 0,
@@ -49,6 +55,31 @@ function detectOpening(img: HTMLImageElement): Slice | null {
       }
     }
   }
+
+  // 2) white centre → expand from the middle while pixels stay near-white
+  if (!found) {
+    const cx = (W / 2) | 0;
+    const cy = (H / 2) | 0;
+    const white = (x: number, y: number) => {
+      const p = at(x, y);
+      return p.a > 200 && p.r > 236 && p.g > 236 && p.b > 236;
+    };
+    if (!white(cx, cy)) return null;
+    let l = cx,
+      r = cx,
+      t = cy,
+      b = cy;
+    while (l > 0 && white(l - 1, cy)) l--;
+    while (r < W - 1 && white(r + 1, cy)) r++;
+    while (t > 0 && white(cx, t - 1)) t--;
+    while (b < H - 1 && white(cx, b + 1)) b++;
+    minX = l;
+    maxX = r;
+    minY = t;
+    maxY = b;
+    found = true;
+  }
+
   if (!found || maxX <= minX || maxY <= minY) return null;
   return {
     su0: minX / W,
