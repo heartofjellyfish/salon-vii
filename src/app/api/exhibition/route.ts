@@ -20,7 +20,9 @@ export async function GET() {
       // sane width so huge uploads don't blow up the WebGL texture.
       const artworks = exhibition.artworks.map((a: any) => ({
         ...a,
-        imageUrl: a.image?.asset ? urlFor(a.image).width(1600).auto("format").url() : null,
+        imageUrl: a.image?.asset
+          ? `/api/img?u=${encodeURIComponent(urlFor(a.image).width(1600).auto("format").url())}`
+          : null,
       }));
       return NextResponse.json({ ...exhibition, artworks });
     }
