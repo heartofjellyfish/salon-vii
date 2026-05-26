@@ -4,7 +4,7 @@ import { useRef, useMemo, useEffect, useState } from "react";
 import { useLoader, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { TextureLoader } from "three";
-import { FrameGroup, getFrameDepth, FRAME_REBATE } from "./FrameBuilders";
+import { FrameGroup, getFrameDepth, getFrameWidth, FRAME_REBATE } from "./FrameBuilders";
 import Nameplate from "./Nameplate";
 import PaintingLighting from "./PaintingLighting";
 import { getPaintingTransform, getFacingDir } from "@/lib/gallery-config";
@@ -15,6 +15,7 @@ interface PaintingProps {
   artwork: Artwork;
   index: number;
   saturationRefs: React.MutableRefObject<{ [key: number]: { value: number } }>;
+  paintingDimsRef: React.MutableRefObject<{ [index: number]: { pw: number; ph: number; frameWidth: number } }>;
   mode: "guided" | "unguided";
   onReveal?: (index: number, artwork: Artwork) => void;
   onClick?: (index: number, artwork: Artwork) => void;
@@ -44,7 +45,7 @@ function SaturationMaterial({ texture, saturationRef, mode }: { texture: THREE.T
   );
 }
 
-export default function Painting({ artwork, index, saturationRefs, mode, onReveal, onClick }: PaintingProps) {
+export default function Painting({ artwork, index, saturationRefs, paintingDimsRef, mode, onReveal, onClick }: PaintingProps) {
   const { position, rotation } = getPaintingTransform(artwork.position);
   const facing = getFacingDir(artwork.position?.wall || "north");
   const groupRef = useRef<THREE.Group>(null!);
@@ -52,7 +53,7 @@ export default function Painting({ artwork, index, saturationRefs, mode, onRevea
   // Get image URL from Sanity
   let imageUrl = artwork.imageUrl;
   if (!imageUrl && artwork.image?.asset) {
-    imageUrl = urlFor(artwork.image).width(800).url();
+    imageUrl = urlFor(artwork.image).width(1600).url();
   }
 
   if (!imageUrl) {
@@ -61,6 +62,11 @@ export default function Painting({ artwork, index, saturationRefs, mode, onRevea
   }
 
   const texture = useLoader(TextureLoader, imageUrl);
+  // Keep texels crisp at the grazing/close angles of "look closely" inspect mode.
+  if (texture && texture.anisotropy !== 8) {
+    texture.anisotropy = 8;
+    texture.needsUpdate = true;
+  }
 
   // Calculate painting dimensions based on aspect ratio
   let pw = 1.0, ph = 1.3;
@@ -77,6 +83,10 @@ export default function Painting({ artwork, index, saturationRefs, mode, onRevea
 
   const satRef = useRef<{ value: number }>({ value: mode === "unguided" ? 1.0 : 0.0 });
   saturationRefs.current[index] = satRef.current;
+
+  // Report real dimensions so inspect mode can frame the whole work (canvas +
+  // frame) and clamp panning to the canvas edges.
+  paintingDimsRef.current[index] = { pw, ph, frameWidth: getFrameWidth(artwork.frameStyle) };
 
   const handleClick = (e: any) => {
     e.stopPropagation();

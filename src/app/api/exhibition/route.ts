@@ -21,7 +21,7 @@ export async function GET() {
       const artworks = exhibition.artworks.map((a: any) => ({
         ...a,
         imageUrl: a.image?.asset
-          ? `/api/img?u=${encodeURIComponent(urlFor(a.image).width(1600).auto("format").url())}`
+          ? `/api/img?u=${encodeURIComponent(urlFor(a.image).width(2048).auto("format").url())}`
           : null,
       }));
       return NextResponse.json({ ...exhibition, artworks });

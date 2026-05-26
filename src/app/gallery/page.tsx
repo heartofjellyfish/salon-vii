@@ -37,6 +37,86 @@ function setAllSaturation(refs: React.MutableRefObject<{ [key: number]: { value:
   Object.values(refs.current).forEach(u => { u.value = value; });
 }
 
+// "You are here" locator for inspect mode — a small thumbnail of the *framed*
+// work (gilt frame drawn around the canvas) with a rectangle tracking the current
+// view. Driven by its own rAF reading the shared (framed-normalised) view ref, so
+// it never re-renders React per frame.
+function InspectMinimap({
+  imageUrl,
+  dims,
+  viewRef,
+}: {
+  imageUrl: string;
+  dims: { pw: number; ph: number; frameWidth: number };
+  viewRef: React.MutableRefObject<{ cx: number; cy: number; w: number; h: number } | null>;
+}) {
+  const rectRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const v = viewRef.current;
+      const r = rectRef.current;
+      if (r) {
+        if (v && (v.w < 0.985 || v.h < 0.985)) {
+          const w = Math.max(0.05, Math.min(1, v.w));
+          const h = Math.max(0.05, Math.min(1, v.h));
+          const cx = Math.min(1 - w / 2, Math.max(w / 2, v.cx));
+          const cy = Math.min(1 - h / 2, Math.max(h / 2, v.cy));
+          r.style.opacity = "1";
+          r.style.left = (cx - w / 2) * 100 + "%";
+          r.style.top = (cy - h / 2) * 100 + "%";
+          r.style.width = w * 100 + "%";
+          r.style.height = h * 100 + "%";
+        } else {
+          r.style.opacity = "0"; // whole work in view — no rectangle needed
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [viewRef]);
+
+  const fw = dims.frameWidth;
+  const framedW = dims.pw + 2 * fw;
+  const framedH = dims.ph + 2 * fw;
+  const aspect = framedW / framedH;
+  const longSide = 112;
+  const boxW = aspect >= 1 ? longSide : Math.round(longSide * aspect);
+  const boxH = aspect >= 1 ? Math.round(longSide / aspect) : longSide;
+  const insetX = (fw / framedW) * 100; // frame thickness as % of the framed box
+  const insetY = (fw / framedH) * 100;
+
+  return (
+    <div style={{
+      position: "fixed", left: 18, bottom: 18, zIndex: 205, pointerEvents: "none",
+      padding: 5, borderRadius: 4, background: "rgba(5,3,8,0.5)",
+      border: "1px solid rgba(201,168,76,0.28)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+      boxShadow: "0 6px 20px rgba(0,0,0,0.4)",
+    }}>
+      <div style={{ position: "relative", width: boxW, height: boxH, borderRadius: 2, overflow: "hidden" }}>
+        {/* gilt frame */}
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "linear-gradient(135deg, #d8b765 0%, #b8923f 45%, #7c5e29 100%)",
+          boxShadow: "inset 0 0 3px rgba(0,0,0,0.5)",
+        }} />
+        {/* canvas, inset by the frame thickness */}
+        <img src={imageUrl} alt="" style={{
+          position: "absolute", top: insetY + "%", left: insetX + "%",
+          width: 100 - 2 * insetX + "%", height: 100 - 2 * insetY + "%",
+          objectFit: "fill", opacity: 0.9,
+        }} />
+        {/* current view, in framed coordinates */}
+        <div ref={rectRef} style={{
+          position: "absolute", boxSizing: "border-box", border: "1.5px solid rgba(245,222,140,0.97)",
+          background: "rgba(201,168,76,0.14)", boxShadow: "0 0 6px rgba(0,0,0,0.7)", transition: "opacity 0.25s ease",
+        }} />
+      </div>
+    </div>
+  );
+}
+
 export default function GalleryPage() {
   const [mode, setMode] = useState<"guided" | "unguided">("unguided");
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -49,6 +129,13 @@ export default function GalleryPage() {
   const saturationRefs = useRef<{ [key: number]: { value: number } }>({});
   const autoAdvanceRef = useRef<number | null>(null);
   const [showHint, setShowHint] = useState(false);
+  const [inspecting, setInspecting] = useState(false);
+  const [inspectedIndex, setInspectedIndex] = useState<number | null>(null);
+  const [inspectCue, setInspectCue] = useState(false); // brief "look closely" prompt on entry
+  const [zoomHover, setZoomHover] = useState(false);
+  const inspectApi = useRef<{ zoom: (dir: 1 | -1) => void; exit: () => void } | null>(null);
+  const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number } }>({});
+  const viewRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
 
   // Reveal the navigation hint a beat after the room settles, then let it
   // dismiss itself — or fade out the moment the visitor takes the wheel.
@@ -66,6 +153,18 @@ export default function GalleryPage() {
       window.removeEventListener("keydown", dismiss);
     };
   }, [loading]);
+
+  // When inspect mode begins, flash the "look closely" prompt and zoom buttons,
+  // then let them recede — the buttons come back on hover.
+  useEffect(() => {
+    if (!inspecting) {
+      setInspectCue(false);
+      return;
+    }
+    setInspectCue(true);
+    const t = setTimeout(() => setInspectCue(false), 2600);
+    return () => clearTimeout(t);
+  }, [inspecting]);
 
   // Load data from Sanity
   useEffect(() => {
@@ -162,6 +261,13 @@ export default function GalleryPage() {
         }}
         onArtworkClick={handleArtworkClick}
         saturationRefs={saturationRefs}
+        paintingDimsRef={paintingDimsRef}
+        onInspectingChange={(insp, idx) => {
+          setInspecting(insp);
+          if (insp && idx != null) setInspectedIndex(idx);
+        }}
+        inspectApi={inspectApi}
+        viewRef={viewRef}
       />
 
       {/* Curator Panel */}
@@ -229,7 +335,7 @@ export default function GalleryPage() {
       )}
 
       {/* Arrow-key navigation hint */}
-      {mode === "unguided" && (
+      {mode === "unguided" && !inspecting && (
         <div style={{
           position: "fixed", bottom: 34, left: "50%", transform: "translateX(-50%)", zIndex: 200,
           display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
@@ -253,6 +359,75 @@ export default function GalleryPage() {
             方向键漫步展厅 · use the arrow keys to wander
           </span>
         </div>
+      )}
+
+      {/* Inspect mode — vignette to focus the eye on the canvas */}
+      {mode === "unguided" && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 150, pointerEvents: "none",
+          background: "radial-gradient(ellipse at center, transparent 50%, rgba(5,3,8,0.6) 100%)",
+          opacity: inspecting ? 1 : 0, transition: "opacity 1s ease",
+        }} />
+      )}
+
+      {/* Inspect mode — "look closely" entry prompt (flashes, then recedes) */}
+      {mode === "unguided" && (
+        <div style={{
+          position: "fixed", top: "13%", left: "50%", transform: "translateX(-50%)", zIndex: 200,
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 6, pointerEvents: "none",
+          opacity: inspecting && inspectCue ? 1 : 0, transition: "opacity 0.8s ease",
+        }}>
+          <span style={{
+            fontFamily: "'Cormorant Garamond', serif", fontSize: 19, fontStyle: "italic",
+            letterSpacing: "0.06em", color: "#c9a84c",
+          }}>
+            贴近观看 · look closely
+          </span>
+          <span style={{
+            fontFamily: "'Cormorant Garamond', serif", fontSize: 12.5,
+            letterSpacing: "0.03em", color: "rgba(201,168,76,0.62)",
+          }}>
+            方向键漫游 · +/− 缩放 · Esc 退后
+          </span>
+        </div>
+      )}
+
+      {/* Inspect mode — zoom buttons (revealed on entry, then only on hover) */}
+      {mode === "unguided" && inspecting && (
+        <div
+          onMouseEnter={() => setZoomHover(true)}
+          onMouseLeave={() => setZoomHover(false)}
+          style={{
+            position: "fixed", right: 0, top: "50%", transform: "translateY(-50%)", zIndex: 210,
+            display: "flex", flexDirection: "column", gap: 10, padding: "28px 18px 28px 44px",
+            opacity: inspectCue || zoomHover ? 1 : 0, transition: "opacity 0.6s ease",
+          }}
+        >
+          {([["+", 1], ["−", -1]] as const).map(([label, dir]) => (
+            <button
+              key={label}
+              onClick={() => inspectApi.current?.zoom(dir as 1 | -1)}
+              aria-label={dir === 1 ? "zoom in" : "zoom out"}
+              style={{
+                width: 42, height: 42, borderRadius: "50%", border: "1px solid rgba(201,168,76,0.4)",
+                background: "rgba(5,3,8,0.6)", color: "#c9a84c", cursor: "pointer", fontSize: "1.4rem",
+                display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
+                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Inspect mode — "you are here" minimap */}
+      {mode === "unguided" && inspecting && inspectedIndex != null && artworks[inspectedIndex]?.imageUrl && (
+        <InspectMinimap
+          imageUrl={artworks[inspectedIndex].imageUrl as string}
+          dims={paintingDimsRef.current[inspectedIndex] ?? { pw: 1, ph: 1, frameWidth: 0.09 }}
+          viewRef={viewRef}
+        />
       )}
 
       {/* Mode Toggle */}
