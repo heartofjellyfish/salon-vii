@@ -7,6 +7,7 @@ import * as THREE from "three";
 import Room from "./Room";
 import Bench from "./Bench";
 import Painting from "./Painting";
+import FloorLine from "./FloorLine";
 import { ACTIVE_LIGHTING } from "@/lib/lighting";
 import { getPaintingTransform, getFacingDir } from "@/lib/gallery-config";
 import type { Artwork } from "@/lib/sanity";
@@ -244,6 +245,7 @@ function SceneContent({ artworks, mode, onArtworkRevealed, onArtworkClick, satur
       <Suspense fallback={null}>
         {artworks.map((artwork, index) => (
           <PaintingBoundary key={artwork._id}>
+            <FloorLine artwork={artwork} />
             <Painting
               artwork={artwork}
               index={index}
