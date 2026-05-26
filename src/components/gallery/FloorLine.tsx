@@ -6,8 +6,8 @@ import type { Artwork } from "@/lib/sanity";
 // SFMOMA-style "stand back" line: a strip of black tape on the floor, parallel
 // to the wall, that visitors must not cross to view the work.
 const LINE_DIST = 0.9; // metres out from the wall
-const LINE_LENGTH = 2.0; // along the wall
-const LINE_WIDTH = 0.05; // strip thickness (toward the room)
+const LINE_LENGTH = 1.0; // along the wall — a discreet, centred segment
+const LINE_WIDTH = 0.035; // strip thickness (toward the room)
 const LINE_Y = 0.013; // just above the floor to avoid z-fighting
 
 export default function FloorLine({ artwork }: { artwork: Artwork }) {
