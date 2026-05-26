@@ -10,7 +10,7 @@ import { NineSliceFrameFromURL } from "@/components/gallery/NineSliceFrame";
 function Framed({ url, normalUrl, fw, pw, ph, x }: { url: string; normalUrl: string; fw: number; pw: number; ph: number; x: number }) {
   const depth = 0.05;
   return (
-    <group position={[x, 0, 0]} rotation={[0.12, 0.5, 0]}>
+    <group position={[x, 0, 0]} rotation={[0, 0, 0]}>
       <mesh position={[0, 0, depth - 0.012]}>
         <planeGeometry args={[pw, ph]} />
         <meshBasicMaterial color="#2f5d86" />
@@ -22,7 +22,7 @@ function Framed({ url, normalUrl, fw, pw, ph, x }: { url: string; normalUrl: str
 
 export default function FrameTestPage() {
   return (
-    <Canvas camera={{ position: [0, 0, 4.8], fov: 50 }} style={{ position: "fixed", inset: 0, background: "#15131a" }}>
+    <Canvas camera={{ position: [0, 0, 4.8], fov: 50 }} style={{ position: "fixed", inset: 0, background: "#6e3a57" }}>
       <ambientLight intensity={0.4} color="#c4b8aa" />
       <hemisphereLight args={["#fff4e6", "#2a2030", 0.5]} />
       <directionalLight position={[-3, 2.5, 3]} intensity={2.2} color="#fff2e0" />
