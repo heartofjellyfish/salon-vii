@@ -1,6 +1,6 @@
 "use client";
 
-import { Component, Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
@@ -35,6 +35,7 @@ export interface PaintingDims {
 interface GallerySceneProps {
   artworks: Artwork[];
   mode: "guided" | "unguided";
+  onReady?: () => void;
   onArtworkRevealed?: (index: number, artwork: Artwork) => void;
   onArtworkClick?: (index: number, artwork: Artwork) => void;
   saturationRefs: React.MutableRefObject<{ [key: number]: { value: number } }>;
@@ -79,6 +80,12 @@ const INSPECT_STEPS = [1.0, 0.6, 0.4, 0.28];
 // Held-arrow pan speed in screen-heights per second, so roaming feels the same
 // at every zoom. Eased for a soft start/stop.
 const PAN_SPEED = 0.95;
+
+// The camera opens the show pulled well back into the room, then dollies in to
+// the default standing distance as the black curtain brightens — a slow
+// cinematic push that lands on the first wall. Kept just inside the front wall
+// so the far frame never clips through it.
+const INTRO_DEPTH = 9;
 
 interface Anchor {
   camPos: [number, number, number];
@@ -125,6 +132,17 @@ class PaintingBoundary extends Component<{ children: ReactNode }, { failed: bool
   }
 }
 
+// Last child inside the asset Suspense gate: Suspense holds back ALL of its
+// children until every suspending sibling (room textures, painting textures)
+// has resolved, so this effect fires exactly once — the moment the whole room
+// is ready to be shown in a single frame.
+function SceneReady({ onReady }: { onReady?: () => void }) {
+  useEffect(() => {
+    onReady?.();
+  }, [onReady]);
+  return null;
+}
+
 // Keep tone-mapping exposure in sync with the active preset (updates on hot reload).
 function ExposureSync() {
   const gl = useThree((s) => s.gl);
@@ -141,10 +159,13 @@ function ExposureSync() {
 //  • Inspect ("look closely") — entered at fit (vignette fades in) and held there;
 //    +/- step the zoom into brushwork, the four arrows roam freely to the frame's
 //    outer edges, and Esc / zooming back out past fit returns to the room at fit.
+// On entry the camera also plays a slow opening dolly-in from far back, in step
+// with the curtain brightening (gated by `revealed`).
 function AnchorControls({
   anchors,
   start,
   active,
+  revealed,
   paintingDimsRef,
   onInspectingChange,
   inspectApi,
@@ -153,6 +174,7 @@ function AnchorControls({
   anchors: Anchor[];
   start: number;
   active: boolean;
+  revealed: boolean;
   paintingDimsRef: React.MutableRefObject<{ [index: number]: PaintingDims }>;
   onInspectingChange?: (inspecting: boolean, artworkIndex?: number) => void;
   inspectApi?: React.MutableRefObject<InspectApi | null>;
@@ -181,7 +203,9 @@ function AnchorControls({
   const easeLambda = useRef(11);
 
   // Eased dolly distance from the wall (metres); eases toward the computed target.
-  const dollyDepth = useRef(6);
+  // Opens pulled back at INTRO_DEPTH and holds there until the curtain lifts.
+  const dollyDepth = useRef(INTRO_DEPTH);
+  const introDone = useRef(false); // latches once the opening dolly-in has landed
   const easeZoom = useRef(9); // softened on entering inspect for a felt "lean in"
   const inspecting = useRef(false);
   const roomIdx = useRef(DEFAULT_ROOM_INDEX); // index into ROOM_OUT
@@ -422,7 +446,6 @@ function AnchorControls({
       u.current = THREE.MathUtils.damp(u.current, targetU.current, easeLambda.current, dt);
       if (Math.abs(targetU.current - u.current) < 0.0015) u.current = targetU.current;
     }
-
     const aspect = sizeRef.current.width / Math.max(1, sizeRef.current.height);
     const dims = currentDims();
     // Dolly target: bare-frame fit (inspect — frame fills) or the room base that
@@ -430,7 +453,18 @@ function AnchorControls({
     const targetDepth = inspecting.current
       ? framedFit(dims, aspect) * INSPECT_STEPS[inspectStep.current]
       : roomBaseDepth(dims, aspect) * ROOM_OUT[roomIdx.current];
-    dollyDepth.current = THREE.MathUtils.damp(dollyDepth.current, targetDepth, easeZoom.current, dt);
+    // Opening dolly-in: hold far behind the black curtain, then drift in slowly
+    // (eyes-opening) to the room overview before normal responsive dollying.
+    let aimDepth = targetDepth;
+    let zoomLambda = easeZoom.current;
+    if (!revealed) {
+      aimDepth = INTRO_DEPTH;
+      zoomLambda = 8;
+    } else if (!introDone.current) {
+      zoomLambda = 1.4;
+      if (Math.abs(dollyDepth.current - targetDepth) < 0.06) introDone.current = true;
+    }
+    dollyDepth.current = THREE.MathUtils.damp(dollyDepth.current, aimDepth, zoomLambda, dt);
     const depth = dollyDepth.current;
 
     // Pan extents are the FRAMED edges, so you can always roam out to a complete
@@ -512,6 +546,8 @@ function AnchorControls({
 function SceneContent({
   artworks,
   mode,
+  onReady,
+  revealed,
   onArtworkRevealed,
   onArtworkClick,
   saturationRefs,
@@ -519,7 +555,7 @@ function SceneContent({
   onInspectingChange,
   inspectApi,
   viewRef,
-}: GallerySceneProps) {
+}: GallerySceneProps & { revealed: boolean }) {
   const { anchors, start } = useMemo(() => buildAnchors(artworks), [artworks]);
   return (
     <>
@@ -528,7 +564,8 @@ function SceneContent({
         <AnchorControls
           anchors={anchors}
           start={start}
-          active={mode === "unguided"}
+          active={mode === "unguided" && revealed}
+          revealed={revealed}
           paintingDimsRef={paintingDimsRef}
           onInspectingChange={onInspectingChange}
           inspectApi={inspectApi}
@@ -540,11 +577,12 @@ function SceneContent({
       <color attach="background" args={["#0a0508"]} />
       <ambientLight intensity={ACTIVE_LIGHTING.ambient.intensity} color={ACTIVE_LIGHTING.ambient.color} />
       <hemisphereLight args={[ACTIVE_LIGHTING.hemisphere.sky, ACTIVE_LIGHTING.hemisphere.ground, ACTIVE_LIGHTING.hemisphere.intensity]} />
+      {/* One gate for the entire room: wallpaper, bench, every painting + frame +
+          picture-light. Nothing renders until all of it resolves, so it appears
+          in a single frame rather than popping in piece by piece. */}
       <Suspense fallback={null}>
         <Room />
-      </Suspense>
-      <Bench position={[0, 0, -2]} />
-      <Suspense fallback={null}>
+        <Bench position={[0, 0, -2]} />
         {artworks.map((artwork, index) => (
           <PaintingBoundary key={artwork._id}>
             <FloorLine artwork={artwork} />
@@ -559,6 +597,7 @@ function SceneContent({
             />
           </PaintingBoundary>
         ))}
+        <SceneReady onReady={onReady} />
       </Suspense>
     </>
   );
@@ -567,6 +606,7 @@ function SceneContent({
 export default function GalleryScene({
   artworks,
   mode,
+  onReady,
   onArtworkRevealed,
   onArtworkClick,
   saturationRefs,
@@ -575,6 +615,11 @@ export default function GalleryScene({
   inspectApi,
   viewRef,
 }: GallerySceneProps) {
+  const [revealed, setRevealed] = useState(false);
+  const handleReady = useCallback(() => {
+    setRevealed(true);
+    onReady?.();
+  }, [onReady]);
   return (
     <Canvas
       gl={{ antialias: true, alpha: true, toneMapping: THREE.ReinhardToneMapping, toneMappingExposure: ACTIVE_LIGHTING.exposure }}
@@ -585,6 +630,8 @@ export default function GalleryScene({
       <SceneContent
         artworks={artworks}
         mode={mode}
+        revealed={revealed}
+        onReady={handleReady}
         onArtworkRevealed={onArtworkRevealed}
         onArtworkClick={onArtworkClick}
         saturationRefs={saturationRefs}

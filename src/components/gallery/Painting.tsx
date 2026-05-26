@@ -21,7 +21,7 @@ interface PaintingProps {
   onClick?: (index: number, artwork: Artwork) => void;
 }
 
-function SaturationMaterial({ texture, saturationRef, mode }: { texture: THREE.Texture; saturationRef: React.MutableRefObject<{ value: number }>; mode: string }) {
+function SaturationMaterial({ texture, hiRes, saturationRef, mode }: { texture: THREE.Texture; hiRes: THREE.Texture | null; saturationRef: React.MutableRefObject<{ value: number }>; mode: string }) {
   const uniforms = useMemo(() => ({
     map: { value: texture },
     saturation: { value: mode === "unguided" ? 1.0 : 0.0 },
@@ -30,6 +30,12 @@ function SaturationMaterial({ texture, saturationRef, mode }: { texture: THREE.T
   useEffect(() => {
     saturationRef.current = uniforms.saturation;
   }, [saturationRef, uniforms.saturation]);
+
+  // Swap in the sharper texture the moment it arrives, without rebuilding the
+  // uniforms object (which would reset the saturation reveal).
+  useEffect(() => {
+    uniforms.map.value = hiRes ?? texture;
+  }, [hiRes, texture, uniforms]);
 
   return (
     <shaderMaterial
@@ -68,6 +74,44 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
     texture.needsUpdate = true;
   }
 
+  // Progressive resolution: the base texture (≈1600px wide) is what gates the
+  // gallery reveal and looks fine from across the room. As the visitor dollies
+  // toward this canvas, pull a high-res variant in *ahead* of the closest stops
+  // (trigger at 1.7m, while presets reach 0.45m) so the zoom never lands on a
+  // soft image waiting to sharpen. Only Sanity-hosted images expose width
+  // variants; the Wikimedia fallbacks stay at their single size.
+  const HI_RES_TRIGGER = 1.7;
+  const hiResUrl = useMemo(() => {
+    if (artwork.image?.asset) {
+      return `/api/img?u=${encodeURIComponent(urlFor(artwork.image).width(2800).auto("format").url())}`;
+    }
+    return null;
+  }, [artwork]);
+  const [hiRes, setHiRes] = useState<THREE.Texture | null>(null);
+  const hiReqRef = useRef(false);
+
+  useFrame(({ camera }) => {
+    if (!hiResUrl || hiReqRef.current) return;
+    const dx = camera.position.x - position[0];
+    const dz = camera.position.z - position[2];
+    if (Math.hypot(dx, dz) <= HI_RES_TRIGGER) {
+      hiReqRef.current = true;
+      new TextureLoader().load(
+        hiResUrl,
+        (t) => {
+          // Mirror the base texture's color handling so the swap is invisible
+          // apart from the added sharpness.
+          t.colorSpace = texture.colorSpace;
+          t.anisotropy = Math.max(texture.anisotropy || 1, 8);
+          t.needsUpdate = true;
+          setHiRes(t);
+        },
+        undefined,
+        () => { hiReqRef.current = false; } // let a later approach retry on failure
+      );
+    }
+  });
+
   // Calculate painting dimensions based on aspect ratio
   let pw = 1.0, ph = 1.3;
   if (texture?.image) {
@@ -103,7 +147,7 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
       {/* Painting canvas */}
       <mesh position={[0, 0, canvasZ]} onClick={handleClick} userData={{ index, artwork }}>
         <planeGeometry args={[pw, ph]} />
-        <SaturationMaterial texture={texture} saturationRef={satRef} mode={mode} />
+        <SaturationMaterial texture={texture} hiRes={hiRes} saturationRef={satRef} mode={mode} />
       </mesh>
 
       {/* Frame */}

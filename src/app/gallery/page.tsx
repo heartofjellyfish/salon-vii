@@ -6,11 +6,9 @@ import type { Artwork, Exhibition } from "@/lib/sanity";
 
 const GalleryScene = dynamic(() => import("@/components/gallery/GalleryScene"), {
   ssr: false,
-  loading: () => (
-    <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#0a0508", color: "#c9a84c", fontFamily: "'Cormorant Garamond', serif", fontSize: "1.1rem" }}>
-      Preparing the gallery…
-    </div>
-  ),
+  // Plain black while the chunk loads — the page's own "lights coming up" overlay
+  // sits on top of this, so it never needs its own copy.
+  loading: () => <div style={{ position: "fixed", inset: 0, background: "#060309" }} />,
 });
 
 // Animation helper for saturation reveal
@@ -126,6 +124,8 @@ export default function GalleryPage() {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [narrative, setNarrative] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [sceneReady, setSceneReady] = useState(false);
+  const [overlayGone, setOverlayGone] = useState(false);
   const saturationRefs = useRef<{ [key: number]: { value: number } }>({});
   const autoAdvanceRef = useRef<number | null>(null);
   const [showHint, setShowHint] = useState(false);
@@ -137,10 +137,24 @@ export default function GalleryPage() {
   const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number } }>({});
   const viewRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
 
-  // Reveal the navigation hint a beat after the room settles, then let it
+  // The whole room — wallpaper, lighting, every painting + frame — is held behind
+  // one Suspense gate and revealed in a single frame once all of it is decoded.
+  // `ready` flips the black overlay to brightening. The degenerate case (data
+  // failed, no artworks) still lifts the curtain so we don't trap the visitor.
+  const ready = sceneReady || (!loading && artworks.length === 0);
+
+  // Drop the overlay from the tree once it has finished fading, so it stops
+  // intercepting nothing-events and is gone for good.
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => setOverlayGone(true), 2700);
+    return () => clearTimeout(t);
+  }, [ready]);
+
+  // Reveal the navigation hint a beat after the room brightens, then let it
   // dismiss itself — or fade out the moment the visitor takes the wheel.
   useEffect(() => {
-    if (loading) return;
+    if (!ready) return;
     const appear = setTimeout(() => setShowHint(true), 1400);
     const vanish = setTimeout(() => setShowHint(false), 8000);
     const dismiss = (e: KeyboardEvent) => {
@@ -152,7 +166,7 @@ export default function GalleryPage() {
       clearTimeout(vanish);
       window.removeEventListener("keydown", dismiss);
     };
-  }, [loading]);
+  }, [ready]);
 
   // When inspect mode begins, flash the "look closely" prompt and zoom buttons,
   // then let them recede — the buttons come back on hover.
@@ -166,13 +180,21 @@ export default function GalleryPage() {
     return () => clearTimeout(t);
   }, [inspecting]);
 
-  // Load data from Sanity
+  // Load data — reuse what the entrance already fetched (sessionStorage) so the
+  // gallery doesn't pay a second round trip behind the black screen.
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/exhibition");
-        const data = await res.json();
-        if (data.artworks) {
+        let data: any = null;
+        try {
+          const cached = sessionStorage.getItem("sv-exhibition");
+          if (cached) data = JSON.parse(cached);
+        } catch {}
+        if (!data) {
+          const res = await fetch("/api/exhibition");
+          data = await res.json();
+        }
+        if (data?.artworks) {
           // Camera faces the north wall; the south (camera) wall stays empty —
           // drop its artwork so no painting or frame renders there.
           setArtworks(data.artworks.filter((a: Artwork) => a.position?.wall !== "south"));
@@ -250,25 +272,45 @@ export default function GalleryPage() {
   const currentArtwork = activeArtwork?.artwork;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#0a0508", overflow: "hidden" }}>
-      {/* 3D Gallery */}
-      <GalleryScene
-        artworks={artworks}
-        mode={mode}
-        onArtworkRevealed={(idx, aw) => {
-          setActiveArtwork({ index: idx, artwork: aw });
-          setNarrative(aw.narrative || "");
-        }}
-        onArtworkClick={handleArtworkClick}
-        saturationRefs={saturationRefs}
-        paintingDimsRef={paintingDimsRef}
-        onInspectingChange={(insp, idx) => {
-          setInspecting(insp);
-          if (insp && idx != null) setInspectedIndex(idx);
-        }}
-        inspectApi={inspectApi}
-        viewRef={viewRef}
-      />
+    <div style={{ position: "fixed", inset: 0, background: "#060309", overflow: "hidden" }}>
+      {/* 3D Gallery — only mounted once we have artworks, so the Suspense gate
+          (and its scene-ready signal) is never tripped by an empty room. */}
+      {artworks.length > 0 && (
+        <GalleryScene
+          artworks={artworks}
+          mode={mode}
+          onReady={() => setSceneReady(true)}
+          onArtworkRevealed={(idx, aw) => {
+            setActiveArtwork({ index: idx, artwork: aw });
+            setNarrative(aw.narrative || "");
+          }}
+          onArtworkClick={handleArtworkClick}
+          saturationRefs={saturationRefs}
+          paintingDimsRef={paintingDimsRef}
+          onInspectingChange={(insp, idx) => {
+            setInspecting(insp);
+            if (insp && idx != null) setInspectedIndex(idx);
+          }}
+          inspectApi={inspectApi}
+          viewRef={viewRef}
+        />
+      )}
+
+      {/* Scene transition — a plain black curtain that holds until every asset
+          is ready, then fades to reveal the fully-formed room. No copy: loading
+          is fast enough that text would only flash. */}
+      {!overlayGone && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 400, background: "#060309",
+            opacity: ready ? 0 : 1,
+            // Slow, eyes-opening brightening: lingers in the dark, then the light
+            // wells up and settles into the room.
+            transition: "opacity 2.6s cubic-bezier(0.45,0,0.25,1)",
+            pointerEvents: ready ? "none" : "auto",
+          }}
+        />
+      )}
 
       {/* Curator Panel */}
       <div style={{
