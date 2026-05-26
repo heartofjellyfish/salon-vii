@@ -76,6 +76,16 @@ export default function Nameplate({ artwork, ph }: { artwork: Artwork; ph: numbe
       const b = base.getContext("2d")!;
       b.drawImage(img, 0, 0, IMG_W, IMG_H);
       drawText(b, title, sub, "rgba(70,48,18,0.9)");
+      // The frame casts a top-down shadow onto the wall just below it; the
+      // plaque sits in that band, so darken it (strongest at the top edge,
+      // fading down) instead of letting its sheen pop out of the shade.
+      const shade = b.createLinearGradient(0, 0, 0, IMG_H);
+      shade.addColorStop(0, "rgba(0,0,0,0.55)");
+      shade.addColorStop(1, "rgba(0,0,0,0.18)");
+      b.globalCompositeOperation = "source-atop"; // darken only the plate, keep corners transparent
+      b.fillStyle = shade;
+      b.fillRect(0, 0, IMG_W, IMG_H);
+      b.globalCompositeOperation = "source-over";
       const colorTex = new THREE.CanvasTexture(base);
       colorTex.colorSpace = THREE.SRGBColorSpace;
       colorTex.anisotropy = gl.capabilities.getMaxAnisotropy();
@@ -99,10 +109,10 @@ export default function Nameplate({ artwork, ph }: { artwork: Artwork; ph: numbe
           normalScale: new THREE.Vector2(0.5, 0.5),
           transparent: true,
           alphaTest: 0.5,
-          metalness: 0.55,
-          roughness: 0.45,
+          metalness: 0.45,
+          roughness: 0.58,
           envMap: getFrameEnvMap(gl),
-          envMapIntensity: 0.6,
+          envMapIntensity: 0.35,
         })
       );
     };
