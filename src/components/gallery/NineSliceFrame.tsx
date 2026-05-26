@@ -125,6 +125,7 @@ function buildNineSlice(pw: number, ph: number, frameWidth: number, rebate: numb
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
   geo.setIndex(indices);
+  geo.computeVertexNormals(); // flat quads → +Z normals, so the lit material works
   return geo;
 }
 
@@ -135,9 +136,24 @@ export interface NineSliceFrameProps {
   frameWidth?: number; // world thickness of the border (uniform on all sides)
   rebate?: number; // how much the inner edge overlaps the painting
   insets?: Slice; // override auto-detection (for JPGs with no alpha)
+  normal?: THREE.Texture; // tangent-space normal map → relief reacts to scene light
+  normalScale?: number;
+  roughness?: number;
+  metalness?: number;
 }
 
-export function NineSliceFrame({ texture, pw, ph, frameWidth = 0.09, rebate = 0.012, insets }: NineSliceFrameProps) {
+export function NineSliceFrame({
+  texture,
+  pw,
+  ph,
+  frameWidth = 0.09,
+  rebate = 0.012,
+  insets,
+  normal,
+  normalScale = 0.85,
+  roughness = 0.52,
+  metalness = 0.15,
+}: NineSliceFrameProps) {
   const [slice, setSlice] = useState<Slice | null>(insets ?? null);
 
   useEffect(() => {
@@ -153,29 +169,62 @@ export function NineSliceFrame({ texture, pw, ph, frameWidth = 0.09, rebate = 0.
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 8;
     texture.needsUpdate = true;
-  }, [texture]);
+    if (normal) {
+      normal.colorSpace = THREE.NoColorSpace; // normal maps must stay linear
+      normal.anisotropy = 8;
+      normal.needsUpdate = true;
+    }
+  }, [texture, normal]);
 
   const geo = useMemo(() => (slice ? buildNineSlice(pw, ph, frameWidth, rebate, slice) : null), [pw, ph, frameWidth, rebate, slice]);
-  const mat = useMemo(
-    () => new THREE.MeshBasicMaterial({ map: texture, transparent: true, alphaTest: 0.1, toneMapped: false, side: THREE.DoubleSide }),
-    [texture],
-  );
+  const mat = useMemo(() => {
+    const m = new THREE.MeshStandardMaterial({
+      map: texture,
+      normalMap: normal ?? null,
+      transparent: true,
+      alphaTest: 0.1,
+      side: THREE.DoubleSide,
+      roughness,
+      metalness,
+    });
+    m.normalScale.set(normalScale, normalScale);
+    return m;
+  }, [texture, normal, normalScale, roughness, metalness]);
 
   if (!geo) return null;
   return <mesh geometry={geo} material={mat} position={[0, 0, 0.006]} />;
 }
 
-// URL wrapper: loads the texture (suspends) then renders the 9-slice frame.
+// URL wrapper: loads the colour map (+ optional normal map), then renders the
+// 9-slice frame. Both maps share the geometry UVs, so the relief lines up.
 export function NineSliceFrameFromURL({
   url,
+  normalUrl,
   pw,
   ph,
   frameWidth,
   rebate,
   insets,
-}: { url: string } & Omit<NineSliceFrameProps, "texture">) {
-  const texture = useLoader(TextureLoader, url);
-  return <NineSliceFrame texture={texture} pw={pw} ph={ph} frameWidth={frameWidth} rebate={rebate} insets={insets} />;
+  normalScale,
+  roughness,
+  metalness,
+}: { url: string; normalUrl?: string } & Omit<NineSliceFrameProps, "texture" | "normal">) {
+  const urls = normalUrl ? [url, normalUrl] : [url];
+  const textures = useLoader(TextureLoader, urls) as THREE.Texture[];
+  return (
+    <NineSliceFrame
+      texture={textures[0]}
+      normal={normalUrl ? textures[1] : undefined}
+      pw={pw}
+      ph={ph}
+      frameWidth={frameWidth}
+      rebate={rebate}
+      insets={insets}
+      normalScale={normalScale}
+      roughness={roughness}
+      metalness={metalness}
+    />
+  );
 }
 
 // A throwaway gold frame with a transparent centre + corner markers, drawn to a
