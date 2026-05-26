@@ -183,19 +183,22 @@ function getShadowTexture(): THREE.Texture {
   cv.width = S;
   cv.height = S;
   const ctx = cv.getContext("2d")!;
-  ctx.clearRect(0, 0, S, S);
-  // 1) soft contact halo on ALL sides — the proud frame occludes ambient/fill
-  //    light in the crevice where it meets the wall (faint, symmetric L/R + top)
-  ctx.filter = "blur(26px)";
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  ctx.fillRect(46, 46, S - 92, S - 92);
-  ctx.filter = "none";
-  // 2) the top-down hemisphere light → a stronger drop along the bottom
-  const vg = ctx.createLinearGradient(0, S * 0.42, 0, S);
-  vg.addColorStop(0, "rgba(0,0,0,0)");
-  vg.addColorStop(1, "rgba(0,0,0,0.55)");
+  // dark at the top (right under the frame), fading downward
+  const vg = ctx.createLinearGradient(0, 0, 0, S);
+  vg.addColorStop(0, "rgba(0,0,0,0.9)");
+  vg.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = vg;
-  ctx.fillRect(0, S * 0.42, S, S * 0.58);
+  ctx.fillRect(0, 0, S, S);
+  // fade the left/right ends so the band doesn't cut off hard
+  ctx.globalCompositeOperation = "destination-in";
+  const hg = ctx.createLinearGradient(0, 0, S, 0);
+  hg.addColorStop(0, "rgba(0,0,0,0)");
+  hg.addColorStop(0.18, "rgba(0,0,0,1)");
+  hg.addColorStop(0.82, "rgba(0,0,0,1)");
+  hg.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = hg;
+  ctx.fillRect(0, 0, S, S);
+  ctx.globalCompositeOperation = "source-over";
   const t = new THREE.CanvasTexture(cv);
   _shadowTex = t;
   return t;
@@ -281,13 +284,15 @@ export function NineSliceFrame({
   // places the canvas just behind the front face so it isn't sunk in a deep well.
   const bX = pw / 2 - rebate + frameWidth;
   const bY = ph / 2 - rebate + frameWidth;
-  // contact shadow: faint soft halo on all sides (AO of the proud frame) plus a
-  // heavier drop along the bottom (top-down light). Slight downward bias.
+  // a shadow band hugging the bottom edge, dark at the frame and fading down
+  const shadowH = 0.22;
+  const shadowY = -bY - shadowH / 2 + 0.06;
   return (
     <group>
-      <mesh position={[0, -0.05, 0.004]} renderOrder={1}>
-        <planeGeometry args={[bX * 2 + 0.34, bY * 2 + 0.46]} />
-        <meshBasicMaterial map={getShadowTexture()} color={0x000000} transparent opacity={0.6} depthWrite={false} toneMapped={false} />
+      {/* cast shadow below the frame (top light) — just proud of the wall */}
+      <mesh position={[0, shadowY, 0.004]} renderOrder={1}>
+        <planeGeometry args={[bX * 2 + 0.04, shadowH]} />
+        <meshBasicMaterial map={getShadowTexture()} color={0x000000} transparent opacity={0.7} depthWrite={false} toneMapped={false} />
       </mesh>
       <mesh geometry={sidesGeo} material={sidesMat} />
       <mesh geometry={frontGeo} material={frontMat} />
