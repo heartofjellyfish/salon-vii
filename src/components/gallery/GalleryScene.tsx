@@ -21,6 +21,11 @@ interface GallerySceneProps {
 const VIEW_DIST = 3.2; // metres back from the wall — close, comfortable viewing distance
 const EYE_Y = 1.55; // standing eye level = painting centre line (level sightline)
 
+// Forward/back dolly presets (metres from the wall), nearest → farthest.
+// Index 2 is the default comfortable viewing distance (= VIEW_DIST).
+const DEPTH_PRESETS = [0.7, 1.1, 1.7, 2.4, VIEW_DIST, 4.6, 6.4];
+const DEFAULT_DEPTH_INDEX = 4;
+
 interface Anchor {
   camPos: [number, number, number];
   fwd: [number, number]; // horizontal facing toward the wall
@@ -73,6 +78,8 @@ function ExposureSync() {
 // Apple-style camera: while dragging, the camera follows the pointer freely 1:1
 // along a path that wraps the three walls. On release it eases to the nearest
 // painting anchor, so it always settles dead-centre in front of a canvas.
+// Arrow keys: ←/→ turn to the previous/next painting, ↑/↓ dolly forward/back
+// through the DEPTH_PRESETS.
 function AnchorControls({ anchors, start, active }: { anchors: Anchor[]; start: number; active: boolean }) {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
@@ -93,6 +100,13 @@ function AnchorControls({ anchors, start, active }: { anchors: Anchor[]; start: 
   const targetU = useRef(u.current);
   const dragging = useRef(false);
   const lastX = useRef(0);
+  // Eased-turn rate: snappy on mouse release, gentler for arrow-key turns.
+  const easeLambda = useRef(11);
+
+  // Forward/back dolly distance from the wall, eased toward depthTarget.
+  const depth = useRef(VIEW_DIST);
+  const depthTarget = useRef(VIEW_DIST);
+  const depthIndex = useRef(DEFAULT_DEPTH_INDEX);
 
   useEffect(() => {
     u.current = U[start] ?? 0;
@@ -129,6 +143,7 @@ function AnchorControls({ anchors, start, active }: { anchors: Anchor[]; start: 
           best = i;
         }
       }
+      easeLambda.current = 11; // crisp settle on release
       targetU.current = U[best];
     };
     el.addEventListener("pointerdown", onDown);
@@ -141,10 +156,51 @@ function AnchorControls({ anchors, start, active }: { anchors: Anchor[]; start: 
     };
   }, [gl, active, U, total]);
 
-  useFrame(() => {
+  // Arrow-key navigation: ←/→ step to the adjacent painting anchor, ↑/↓ dolly
+  // forward/back through the depth presets.
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        // nearest anchor to where we're heading, then step one painting over
+        let idx = 0;
+        let best = Infinity;
+        for (let i = 0; i < U.length; i++) {
+          const d = Math.abs(U[i] - targetU.current);
+          if (d < best) {
+            best = d;
+            idx = i;
+          }
+        }
+        idx = THREE.MathUtils.clamp(idx + (e.key === "ArrowRight" ? 1 : -1), 0, U.length - 1);
+        easeLambda.current = 4.5; // gentler, more graceful turn for keyboard
+        targetU.current = U[idx];
+        e.preventDefault();
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        // ↑ = walk forward (closer to the wall), ↓ = walk back (see more room)
+        depthIndex.current = THREE.MathUtils.clamp(
+          depthIndex.current + (e.key === "ArrowUp" ? -1 : 1),
+          0,
+          DEPTH_PRESETS.length - 1
+        );
+        depthTarget.current = DEPTH_PRESETS[depthIndex.current];
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, U]);
+
+  useFrame((_, delta) => {
+    const dt = Math.min(delta, 0.1); // cap after tab-switch so we don't jump
+    // Frame-rate-independent ease toward the target anchor, with a snap once
+    // we're within a hair so it settles dead-centre instead of crawling forever.
     if (!dragging.current) {
-      u.current += (targetU.current - u.current) * 0.15; // ease/snap after release
+      u.current = THREE.MathUtils.damp(u.current, targetU.current, easeLambda.current, dt);
+      if (Math.abs(targetU.current - u.current) < 0.0015) u.current = targetU.current;
     }
+    depth.current = THREE.MathUtils.damp(depth.current, depthTarget.current, 9, dt);
+
     let i = 0;
     while (i < U.length - 2 && u.current > U[i + 1]) i++;
     const segLen = U[i + 1] - U[i] || 1;
@@ -158,7 +214,10 @@ function AnchorControls({ anchors, start, active }: { anchors: Anchor[]; start: 
     const l = Math.hypot(fx, fz) || 1;
     fx /= l;
     fz /= l;
-    camera.position.set(px, EYE_Y, pz);
+    // The anchor camPos sits at VIEW_DIST from the wall; shift along the facing
+    // axis to honour the current dolly depth (+ = back into the room).
+    const extra = depth.current - VIEW_DIST;
+    camera.position.set(px + fx * extra, EYE_Y, pz + fz * extra);
     // fwd points from the wall into the room; the camera stands in front of the
     // painting and must look back AT the wall, i.e. the −fwd direction.
     camera.lookAt(px - fx * VIEW_DIST, EYE_Y, pz - fz * VIEW_DIST);
