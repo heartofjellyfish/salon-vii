@@ -5,6 +5,7 @@ import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
 import Room from "./Room";
+import Bench from "./Bench";
 import Painting from "./Painting";
 import { ACTIVE_LIGHTING } from "@/lib/lighting";
 import { getPaintingTransform, getFacingDir } from "@/lib/gallery-config";
@@ -239,6 +240,7 @@ function SceneContent({ artworks, mode, onArtworkRevealed, onArtworkClick, satur
       <Suspense fallback={null}>
         <Room />
       </Suspense>
+      <Bench position={[0, 0, -2]} />
       <Suspense fallback={null}>
         {artworks.map((artwork, index) => (
           <PaintingBoundary key={artwork._id}>
