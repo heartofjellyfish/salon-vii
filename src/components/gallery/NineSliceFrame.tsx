@@ -92,7 +92,7 @@ function detectOpening(img: HTMLImageElement): Slice | null {
 // Build the 8-quad border (4 fixed corners + 4 stretched edges) around a pw×ph
 // opening, mapping each region to the matching slice of the texture. The centre
 // is left empty so the painting shows through.
-function buildNineSlice(pw: number, ph: number, frameWidth: number, rebate: number, s: Slice): THREE.BufferGeometry {
+function buildNineSlice(pw: number, ph: number, frameWidth: number, rebate: number, s: Slice, zFront = 0): THREE.BufferGeometry {
   const aX = pw / 2 - rebate;
   const aY = ph / 2 - rebate;
   const bX = aX + frameWidth;
@@ -103,7 +103,7 @@ function buildNineSlice(pw: number, ph: number, frameWidth: number, rebate: numb
   const indices: number[] = [];
   let vi = 0;
   const quad = (x0: number, x1: number, y0: number, y1: number, u0: number, u1: number, v0: number, v1: number) => {
-    positions.push(x0, y0, 0, x1, y0, 0, x1, y1, 0, x0, y1, 0);
+    positions.push(x0, y0, zFront, x1, y0, zFront, x1, y1, zFront, x0, y1, zFront);
     uvs.push(u0, v0, u1, v0, u1, v1, u0, v1);
     indices.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
     vi += 4;
@@ -129,6 +129,43 @@ function buildNineSlice(pw: number, ph: number, frameWidth: number, rebate: numb
   return geo;
 }
 
+// The frame's real thickness: vertical walls from the wall (z=0) out to the
+// front face (z=depth), both the outer sides and the inner rebate. These catch
+// the room light on one side and fall into shadow on the other, so the frame
+// reads as a solid object standing off the wall — not a flat sticker.
+function buildFrameSides(pw: number, ph: number, frameWidth: number, rebate: number, depth: number): THREE.BufferGeometry {
+  const aX = pw / 2 - rebate;
+  const aY = ph / 2 - rebate;
+  const bX = aX + frameWidth;
+  const bY = aY + frameWidth;
+
+  const positions: number[] = [];
+  const indices: number[] = [];
+  let vi = 0;
+  // a wall from (ax,ay,0)-(bx,by,0) rising to z=depth (DoubleSide handles facing)
+  const wall = (ax: number, ay: number, bx: number, by: number) => {
+    positions.push(ax, ay, 0, bx, by, 0, bx, by, depth, ax, ay, depth);
+    indices.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
+    vi += 4;
+  };
+  // outer sides (perimeter at b)
+  wall(bX, -bY, bX, bY);
+  wall(-bX, bY, -bX, -bY);
+  wall(-bX, -bY, bX, -bY);
+  wall(bX, bY, -bX, bY);
+  // inner rebate walls (opening at a)
+  wall(aX, -aY, aX, aY);
+  wall(-aX, aY, -aX, -aY);
+  wall(-aX, -aY, aX, -aY);
+  wall(aX, aY, -aX, aY);
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
 export interface NineSliceFrameProps {
   texture: THREE.Texture;
   pw: number;
@@ -140,6 +177,8 @@ export interface NineSliceFrameProps {
   normalScale?: number;
   roughness?: number;
   metalness?: number;
+  depth?: number; // how far the frame stands off the wall (m) — its real thickness
+  edgeColor?: number; // colour of the side walls (the frame's depth in shadow)
 }
 
 export function NineSliceFrame({
@@ -153,6 +192,8 @@ export function NineSliceFrame({
   normalScale = 0.85,
   roughness = 0.52,
   metalness = 0.15,
+  depth = 0.055,
+  edgeColor = 0x4a3818,
 }: NineSliceFrameProps) {
   const [slice, setSlice] = useState<Slice | null>(insets ?? null);
 
@@ -176,8 +217,13 @@ export function NineSliceFrame({
     }
   }, [texture, normal]);
 
-  const geo = useMemo(() => (slice ? buildNineSlice(pw, ph, frameWidth, rebate, slice) : null), [pw, ph, frameWidth, rebate, slice]);
-  const mat = useMemo(() => {
+  const frontGeo = useMemo(
+    () => (slice ? buildNineSlice(pw, ph, frameWidth, rebate, slice, depth) : null),
+    [pw, ph, frameWidth, rebate, slice, depth],
+  );
+  const sidesGeo = useMemo(() => buildFrameSides(pw, ph, frameWidth, rebate, depth), [pw, ph, frameWidth, rebate, depth]);
+
+  const frontMat = useMemo(() => {
     const m = new THREE.MeshStandardMaterial({
       map: texture,
       normalMap: normal ?? null,
@@ -191,8 +237,20 @@ export function NineSliceFrame({
     return m;
   }, [texture, normal, normalScale, roughness, metalness]);
 
-  if (!geo) return null;
-  return <mesh geometry={geo} material={mat} position={[0, 0, 0.006]} />;
+  const sidesMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color: edgeColor, roughness: 0.6, metalness: 0.25, side: THREE.DoubleSide }),
+    [edgeColor],
+  );
+
+  if (!frontGeo) return null;
+  // back near the wall; front face stands `depth` proud of it. The painting
+  // plane (z≈0.001) ends up recessed inside the frame, like a real hung frame.
+  return (
+    <group position={[0, 0, 0.002]}>
+      <mesh geometry={sidesGeo} material={sidesMat} />
+      <mesh geometry={frontGeo} material={frontMat} />
+    </group>
+  );
 }
 
 // URL wrapper: loads the colour map (+ optional normal map), then renders the
@@ -208,6 +266,8 @@ export function NineSliceFrameFromURL({
   normalScale,
   roughness,
   metalness,
+  depth,
+  edgeColor,
 }: { url: string; normalUrl?: string } & Omit<NineSliceFrameProps, "texture" | "normal">) {
   const urls = normalUrl ? [url, normalUrl] : [url];
   const textures = useLoader(TextureLoader, urls) as THREE.Texture[];
@@ -223,6 +283,8 @@ export function NineSliceFrameFromURL({
       normalScale={normalScale}
       roughness={roughness}
       metalness={metalness}
+      depth={depth}
+      edgeColor={edgeColor}
     />
   );
 }

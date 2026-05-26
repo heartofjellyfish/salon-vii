@@ -333,11 +333,13 @@ export interface FrameTexture {
   normalUrl?: string;
   frameWidth?: number;
   rebate?: number;
+  depth?: number; // real thickness off the wall (m)
+  edgeColor?: number; // side-wall colour
 }
 export const FRAME_TEXTURES: Record<string, FrameTexture> = {
-  baroque_gold: { url: "/frames/f2-avantrend233.jpg", normalUrl: "/frames/f2-normal.png", frameWidth: 0.13 }, // ornate Baroque gilt
-  raw_wood: { url: "/frames/f3-anaterate.png", normalUrl: "/frames/f3-normal.png", frameWidth: 0.11 }, // rustic bronze/wood, rope molding
-  copper_slim: { url: "/frames/f4-susannp4.png", normalUrl: "/frames/f4-normal.png", frameWidth: 0.075 }, // simple slim gilt
+  baroque_gold: { url: "/frames/f2-avantrend233.jpg", normalUrl: "/frames/f2-normal.png", frameWidth: 0.13, depth: 0.075, edgeColor: 0x4a3818 }, // ornate Baroque gilt
+  raw_wood: { url: "/frames/f3-anaterate.png", normalUrl: "/frames/f3-normal.png", frameWidth: 0.11, depth: 0.08, edgeColor: 0x241a10 }, // rustic bronze/wood, rope molding
+  copper_slim: { url: "/frames/f4-susannp4.png", normalUrl: "/frames/f4-normal.png", frameWidth: 0.075, depth: 0.05, edgeColor: 0x6a5223 }, // simple slim gilt
 };
 
 // Every painting gets a photographic frame: mapped by frameStyle, else the clean
@@ -347,11 +349,22 @@ const DEFAULT_FRAME: FrameTexture = {
   url: "/frames/f4-susannp4.png",
   normalUrl: "/frames/f4-normal.png",
   frameWidth: 0.085,
+  depth: 0.055,
+  edgeColor: 0x6a5223,
 };
 
 export function FrameGroup({ frameStyle, pw, ph }: { frameStyle: string; pw: number; ph: number }) {
   const tex = FRAME_TEXTURES[frameStyle] ?? DEFAULT_FRAME;
   return (
-    <NineSliceFrameFromURL url={tex.url} normalUrl={tex.normalUrl} pw={pw} ph={ph} frameWidth={tex.frameWidth} rebate={tex.rebate} />
+    <NineSliceFrameFromURL
+      url={tex.url}
+      normalUrl={tex.normalUrl}
+      pw={pw}
+      ph={ph}
+      frameWidth={tex.frameWidth}
+      rebate={tex.rebate}
+      depth={tex.depth}
+      edgeColor={tex.edgeColor}
+    />
   );
 }
