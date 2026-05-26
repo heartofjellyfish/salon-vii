@@ -25,8 +25,8 @@ const EYE_Y = 1.55; // standing eye level = painting centre line (level sightlin
 
 // Forward/back dolly presets (metres from the wall), nearest → farthest.
 // Index 2 is the default comfortable viewing distance (= VIEW_DIST).
-const DEPTH_PRESETS = [0.7, 1.1, 1.7, 2.4, VIEW_DIST, 4.6, 6.4];
-const DEFAULT_DEPTH_INDEX = 4;
+const DEPTH_PRESETS = [0.45, 0.7, 1.1, 1.7, 2.4, VIEW_DIST, 4.6, 6.4];
+const DEFAULT_DEPTH_INDEX = 5;
 
 interface Anchor {
   camPos: [number, number, number];
