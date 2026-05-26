@@ -148,8 +148,8 @@ function buildFrameSides(pw: number, ph: number, frameWidth: number, rebate: num
   // so the side reads as real recessed depth, not a flat slab.
   const wall = (ax: number, ay: number, bx: number, by: number) => {
     positions.push(ax, ay, 0, bx, by, 0, bx, by, depth, ax, ay, depth);
-    const d = 0.22; // at the wall (deepest, darkest)
-    const l = 2.0; // at the front edge (lit lip — boosted so the depth reads)
+    const d = 0.5; // at the wall: the frame's own colour, just dimmer (not black)
+    const l = 1.05; // at the front edge: full frame colour, lit lip
     colors.push(d, d, d, d, d, d, l, l, l, l, l, l);
     indices.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
     vi += 4;
