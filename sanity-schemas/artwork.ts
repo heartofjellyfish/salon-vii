@@ -24,7 +24,7 @@ export default {
       name: 'frameStyle',
       title: 'Frame Style',
       type: 'string',
-      options: { list: ['baroque_gold', 'raw_wood', 'copper_slim'] },
+      options: { list: ['baroque_gold', 'raw_wood', 'copper_slim', 'classic_gold'] },
       initialValue: 'baroque_gold',
       components: { input: FrameStylePicker },
     },

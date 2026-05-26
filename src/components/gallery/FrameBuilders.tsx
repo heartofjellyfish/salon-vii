@@ -340,12 +340,19 @@ export const FRAME_TEXTURES: Record<string, FrameTexture> = {
   baroque_gold: { url: "/frames/f2-baroque.png", normalUrl: "/frames/f2-baroque-normal.png", frameWidth: 0.13, depth: 0.05, edgeColor: 0xa6823c }, // ornate Baroque gilt (AI-cleaned, straight-on)
   raw_wood: { url: "/frames/f3-anaterate.png", normalUrl: "/frames/f3-normal.png", frameWidth: 0.11, depth: 0.05, edgeColor: 0x6a4f2c }, // rustic bronze/wood, rope molding
   copper_slim: { url: "/frames/f4-susannp4.png", normalUrl: "/frames/f4-normal.png", frameWidth: 0.075, depth: 0.035, edgeColor: 0x9c7a38 }, // simple slim gilt
+  classic_gold: { url: "/frames/f5-classic-gold.png", normalUrl: "/frames/f5-classic-gold-normal.png", frameWidth: 0.085, depth: 0.045, edgeColor: 0xb08a40 }, // smooth classic gilt (AI-generated)
 };
 
 // How far this frame style stands proud of the wall — the painting plane is
 // placed just behind the front face (small rebate) so it isn't sunk in a well.
 export function getFrameDepth(frameStyle: string): number {
   return (FRAME_TEXTURES[frameStyle]?.depth ?? 0.042);
+}
+
+// How far the frame extends beyond the painting edge (per side). Used to place
+// the wall plaque clear of the frame's outer molding.
+export function getFrameWidth(frameStyle: string): number {
+  return (FRAME_TEXTURES[frameStyle]?.frameWidth ?? 0.085);
 }
 export const FRAME_REBATE = 0.012; // painting sits this far behind the front face
 

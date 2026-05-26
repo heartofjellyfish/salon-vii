@@ -21,6 +21,7 @@ const FRAMES: FrameOption[] = [
   { value: "baroque_gold", label: "巴洛克金框", sub: "Ornate Baroque gilt", src: "/static/frames/f2-avantrend233.jpg", borderWidth: 26 },
   { value: "raw_wood", label: "青铜木框", sub: "Rustic bronze / wood", src: "/static/frames/f3-anaterate.png", borderWidth: 24 },
   { value: "copper_slim", label: "细金框", sub: "Simple slim gilt", src: "/static/frames/f4-susannp4.png", borderWidth: 16 },
+  { value: "classic_gold", label: "古典金框", sub: "Smooth classic gilt", src: "/static/frames/f5-classic-gold.png", borderWidth: 20 },
 ];
 
 // Build a square thumbnail URL for the current painting from its asset ref

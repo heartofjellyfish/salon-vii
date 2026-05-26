@@ -29,7 +29,7 @@ export default function FrameTestPage() {
       <Suspense fallback={null}>
         <Framed url="/frames/f2-baroque.png" normalUrl="/frames/f2-baroque-normal.png" fw={0.13} pw={1.4} ph={1.0} x={-2.0} />
         <Framed url="/frames/f3-anaterate.png" normalUrl="/frames/f3-normal.png" fw={0.11} pw={1.4} ph={1.0} x={0} />
-        <Framed url="/frames/f4-susannp4.png" normalUrl="/frames/f4-normal.png" fw={0.075} pw={1.4} ph={1.0} x={2.0} />
+        <Framed url="/frames/f5-classic-gold.png" normalUrl="/frames/f5-classic-gold-normal.png" fw={0.085} pw={1.4} ph={1.0} x={2.0} />
       </Suspense>
     </Canvas>
   );
