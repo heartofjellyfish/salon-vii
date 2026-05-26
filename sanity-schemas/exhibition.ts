@@ -1,4 +1,6 @@
-export default {
+import { defineType } from 'sanity';
+
+export default defineType({
   name: 'exhibition',
   title: 'Exhibition',
   type: 'document',
@@ -22,4 +24,4 @@ export default {
       of: [{ type: 'reference', to: [{ type: 'artwork' }] }],
     },
   ],
-};
+});

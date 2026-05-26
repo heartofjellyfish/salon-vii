@@ -1,4 +1,6 @@
-export default {
+import { defineType } from 'sanity';
+
+export default defineType({
   name: 'artwork',
   title: 'Artwork',
   type: 'document',
@@ -42,4 +44,4 @@ export default {
   preview: {
     select: { title: 'title', subtitle: 'artist', media: 'image' },
   },
-};
+});
