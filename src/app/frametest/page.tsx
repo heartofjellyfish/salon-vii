@@ -10,7 +10,7 @@ import { NineSliceFrameFromURL } from "@/components/gallery/NineSliceFrame";
 function Framed({ url, normalUrl, fw, pw, ph, x }: { url: string; normalUrl: string; fw: number; pw: number; ph: number; x: number }) {
   const depth = 0.05;
   return (
-    <group position={[x, 0, 0]} rotation={[0, 0, 0]}>
+    <group position={[x, 0, 0]} rotation={[0.1, 0.5, 0]}>
       <mesh position={[0, 0, depth - 0.012]}>
         <planeGeometry args={[pw, ph]} />
         <meshBasicMaterial color="#2f5d86" />

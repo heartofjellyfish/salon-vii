@@ -148,8 +148,8 @@ function buildFrameSides(pw: number, ph: number, frameWidth: number, rebate: num
   // so the side reads as real recessed depth, not a flat slab.
   const wall = (ax: number, ay: number, bx: number, by: number) => {
     positions.push(ax, ay, 0, bx, by, 0, bx, by, depth, ax, ay, depth);
-    const d = 0.28; // at the wall (deepest, darkest)
-    const l = 1.0; // at the front edge (catches light)
+    const d = 0.22; // at the wall (deepest, darkest)
+    const l = 2.0; // at the front edge (lit lip — boosted so the depth reads)
     colors.push(d, d, d, d, d, d, l, l, l, l, l, l);
     indices.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
     vi += 4;
@@ -284,15 +284,25 @@ export function NineSliceFrame({
   // places the canvas just behind the front face so it isn't sunk in a deep well.
   const bX = pw / 2 - rebate + frameWidth;
   const bY = ph / 2 - rebate + frameWidth;
-  // a shadow band hugging the bottom edge, dark at the frame and fading down
+  // cast-shadow bands on the wall: a strong one below (top-down light) and a
+  // fainter one off each side — each a clean band fading away from the frame,
+  // not a blurry halo. Same texture (dark edge → fade), rotated per side.
   const shadowH = 0.22;
-  const shadowY = -bY - shadowH / 2 + 0.06;
+  const bottomY = -bY - shadowH / 2 + 0.06;
+  const sideX = bX + shadowH / 2 - 0.06;
   return (
     <group>
-      {/* cast shadow below the frame (top light) — just proud of the wall */}
-      <mesh position={[0, shadowY, 0.004]} renderOrder={1}>
+      <mesh position={[0, bottomY, 0.004]} renderOrder={1}>
         <planeGeometry args={[bX * 2 + 0.04, shadowH]} />
-        <meshBasicMaterial map={getShadowTexture()} color={0x000000} transparent opacity={0.7} depthWrite={false} toneMapped={false} />
+        <meshBasicMaterial map={getShadowTexture()} color={0x000000} transparent opacity={0.68} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[-sideX, 0, 0.004]} rotation={[0, 0, -Math.PI / 2]} renderOrder={1}>
+        <planeGeometry args={[bY * 2 + 0.04, shadowH]} />
+        <meshBasicMaterial map={getShadowTexture()} color={0x000000} transparent opacity={0.4} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[sideX, 0, 0.004]} rotation={[0, 0, Math.PI / 2]} renderOrder={1}>
+        <planeGeometry args={[bY * 2 + 0.04, shadowH]} />
+        <meshBasicMaterial map={getShadowTexture()} color={0x000000} transparent opacity={0.4} depthWrite={false} toneMapped={false} />
       </mesh>
       <mesh geometry={sidesGeo} material={sidesMat} />
       <mesh geometry={frontGeo} material={frontMat} />
