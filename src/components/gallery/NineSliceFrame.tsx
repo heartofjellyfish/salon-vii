@@ -140,11 +140,17 @@ function buildFrameSides(pw: number, ph: number, frameWidth: number, rebate: num
   const bY = aY + frameWidth;
 
   const positions: number[] = [];
+  const colors: number[] = [];
   const indices: number[] = [];
   let vi = 0;
-  // a wall from (ax,ay,0)-(bx,by,0) rising to z=depth (DoubleSide handles facing)
+  // a wall from (ax,ay,0)-(bx,by,0) rising to z=depth (DoubleSide handles facing).
+  // Vertex colour darkens toward the wall (z=0) — light falls off into the crevice,
+  // so the side reads as real recessed depth, not a flat slab.
   const wall = (ax: number, ay: number, bx: number, by: number) => {
     positions.push(ax, ay, 0, bx, by, 0, bx, by, depth, ax, ay, depth);
+    const d = 0.28; // at the wall (deepest, darkest)
+    const l = 1.0; // at the front edge (catches light)
+    colors.push(d, d, d, d, d, d, l, l, l, l, l, l);
     indices.push(vi, vi + 1, vi + 2, vi, vi + 2, vi + 3);
     vi += 4;
   };
@@ -161,6 +167,7 @@ function buildFrameSides(pw: number, ph: number, frameWidth: number, rebate: num
 
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
   geo.setIndex(indices);
   geo.computeVertexNormals();
   return geo;
@@ -269,7 +276,7 @@ export function NineSliceFrame({
   }, [texture, normal, normalScale, roughness, metalness]);
 
   const sidesMat = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: edgeColor, roughness: 0.6, metalness: 0.25, side: THREE.DoubleSide }),
+    () => new THREE.MeshStandardMaterial({ color: edgeColor, vertexColors: true, roughness: 0.65, metalness: 0.1, side: THREE.DoubleSide }),
     [edgeColor],
   );
   if (!frontGeo) return null;
