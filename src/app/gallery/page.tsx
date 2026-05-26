@@ -38,7 +38,7 @@ function setAllSaturation(refs: React.MutableRefObject<{ [key: number]: { value:
 }
 
 export default function GalleryPage() {
-  const [mode, setMode] = useState<"guided" | "unguided">("guided");
+  const [mode, setMode] = useState<"guided" | "unguided">("unguided");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [exhibition, setExhibition] = useState<Exhibition | null>(null);
