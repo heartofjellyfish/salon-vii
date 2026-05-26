@@ -17,10 +17,10 @@
     "@types/three": "^0.184.1",
     "howler": "^2.2.4",
     "next": "^15.5.18",
-    "next-sanity": "^11.6.13",
+    "next-sanity": "^10.1.4",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "sanity": "^5.26.0",
+    "sanity": "^4.22.0",
     "styled-components": "^6.4.2",
     "three": "^0.184.0"
   },
