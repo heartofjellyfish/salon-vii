@@ -4,7 +4,7 @@ import { useRef, useMemo, useEffect, useState } from "react";
 import { useLoader, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { TextureLoader } from "three";
-import { FrameGroup } from "./FrameBuilders";
+import { FrameGroup, getFrameDepth, FRAME_REBATE } from "./FrameBuilders";
 import PaintingLighting from "./PaintingLighting";
 import { getPaintingTransform, getFacingDir } from "@/lib/gallery-config";
 import type { Artwork } from "@/lib/sanity";
@@ -85,11 +85,15 @@ export default function Painting({ artwork, index, saturationRefs, mode, onRevea
     if (onClick) onClick(index, artwork);
   };
 
+  // Sit the canvas just behind the frame's front face (small rebate) so it isn't
+  // sunk at the bottom of the frame's full depth.
+  const canvasZ = getFrameDepth(artwork.frameStyle) - FRAME_REBATE;
+
   return (
     <>
     <group ref={groupRef} position={position} rotation={rotation as any}>
       {/* Painting canvas */}
-      <mesh position={[0, 0, 0.001]} onClick={handleClick} userData={{ index, artwork }}>
+      <mesh position={[0, 0, canvasZ]} onClick={handleClick} userData={{ index, artwork }}>
         <planeGeometry args={[pw, ph]} />
         <SaturationMaterial texture={texture} saturationRef={satRef} mode={mode} />
       </mesh>

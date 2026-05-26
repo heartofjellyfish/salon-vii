@@ -337,10 +337,17 @@ export interface FrameTexture {
   edgeColor?: number; // side-wall colour
 }
 export const FRAME_TEXTURES: Record<string, FrameTexture> = {
-  baroque_gold: { url: "/frames/f2-avantrend233.jpg", normalUrl: "/frames/f2-normal.png", frameWidth: 0.13, depth: 0.075, edgeColor: 0x4a3818 }, // ornate Baroque gilt
-  raw_wood: { url: "/frames/f3-anaterate.png", normalUrl: "/frames/f3-normal.png", frameWidth: 0.11, depth: 0.08, edgeColor: 0x241a10 }, // rustic bronze/wood, rope molding
-  copper_slim: { url: "/frames/f4-susannp4.png", normalUrl: "/frames/f4-normal.png", frameWidth: 0.075, depth: 0.05, edgeColor: 0x6a5223 }, // simple slim gilt
+  baroque_gold: { url: "/frames/f2-avantrend233.jpg", normalUrl: "/frames/f2-normal.png", frameWidth: 0.13, depth: 0.05, edgeColor: 0x4a3818 }, // ornate Baroque gilt
+  raw_wood: { url: "/frames/f3-anaterate.png", normalUrl: "/frames/f3-normal.png", frameWidth: 0.11, depth: 0.05, edgeColor: 0x241a10 }, // rustic bronze/wood, rope molding
+  copper_slim: { url: "/frames/f4-susannp4.png", normalUrl: "/frames/f4-normal.png", frameWidth: 0.075, depth: 0.035, edgeColor: 0x6a5223 }, // simple slim gilt
 };
+
+// How far this frame style stands proud of the wall — the painting plane is
+// placed just behind the front face (small rebate) so it isn't sunk in a well.
+export function getFrameDepth(frameStyle: string): number {
+  return (FRAME_TEXTURES[frameStyle]?.depth ?? 0.042);
+}
+export const FRAME_REBATE = 0.012; // painting sits this far behind the front face
 
 // Every painting gets a photographic frame: mapped by frameStyle, else the clean
 // simple gilt (which stretches best for unknown aspect ratios). The procedural
@@ -349,7 +356,7 @@ const DEFAULT_FRAME: FrameTexture = {
   url: "/frames/f4-susannp4.png",
   normalUrl: "/frames/f4-normal.png",
   frameWidth: 0.085,
-  depth: 0.055,
+  depth: 0.042,
   edgeColor: 0x6a5223,
 };
 

@@ -243,10 +243,10 @@ export function NineSliceFrame({
   );
 
   if (!frontGeo) return null;
-  // back near the wall; front face stands `depth` proud of it. The painting
-  // plane (z≈0.001) ends up recessed inside the frame, like a real hung frame.
+  // back sits on the wall (z=0); front face stands `depth` proud. Painting.tsx
+  // places the canvas just behind the front face so it isn't sunk in a deep well.
   return (
-    <group position={[0, 0, 0.002]}>
+    <group>
       <mesh geometry={sidesGeo} material={sidesMat} />
       <mesh geometry={frontGeo} material={frontMat} />
     </group>

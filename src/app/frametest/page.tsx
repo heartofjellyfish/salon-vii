@@ -8,13 +8,14 @@ import { Canvas } from "@react-three/fiber";
 import { NineSliceFrameFromURL } from "@/components/gallery/NineSliceFrame";
 
 function Framed({ url, normalUrl, fw, pw, ph, x }: { url: string; normalUrl: string; fw: number; pw: number; ph: number; x: number }) {
+  const depth = 0.05;
   return (
     <group position={[x, 0, 0]} rotation={[0.12, 0.5, 0]}>
-      <mesh>
+      <mesh position={[0, 0, depth - 0.012]}>
         <planeGeometry args={[pw, ph]} />
         <meshBasicMaterial color="#2f5d86" />
       </mesh>
-      <NineSliceFrameFromURL url={url} normalUrl={normalUrl} pw={pw} ph={ph} frameWidth={fw} />
+      <NineSliceFrameFromURL url={url} normalUrl={normalUrl} pw={pw} ph={ph} frameWidth={fw} depth={depth} />
     </group>
   );
 }
