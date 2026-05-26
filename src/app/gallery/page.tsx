@@ -309,16 +309,21 @@ export default function GalleryPage() {
             WebkitBackdropFilter: ready ? "blur(0px)" : "blur(20px)",
             transition: "backdrop-filter 2.6s cubic-bezier(0.4,0,0.2,1), -webkit-backdrop-filter 2.6s cubic-bezier(0.4,0,0.2,1)",
           }} />
-          {/* upper lid — retracts off the top */}
+          {/* upper lid — retracts off the top. Its leading (lower) edge fades to
+              transparent so the reveal is a soft gradient, not a hard line. Tall &
+              overlapping at the centre so the screen still holds solid black when
+              closed (the feathers sit over the other lid's solid body). */}
           <div style={{
-            position: "fixed", left: 0, right: 0, top: 0, height: "50%", zIndex: 400, background: "#060309",
+            position: "fixed", left: 0, right: 0, top: 0, height: "72%", zIndex: 400,
+            background: "linear-gradient(to bottom, #060309 0%, #060309 86%, rgba(6,3,9,0) 100%)",
             transform: ready ? "translateY(-100%)" : "translateY(0)",
             transition: "transform 2.6s cubic-bezier(0.5,0,0.2,1)",
             pointerEvents: ready ? "none" : "auto",
           }} />
-          {/* lower lid — retracts off the bottom */}
+          {/* lower lid — retracts off the bottom, leading (upper) edge feathered */}
           <div style={{
-            position: "fixed", left: 0, right: 0, bottom: 0, height: "50%", zIndex: 400, background: "#060309",
+            position: "fixed", left: 0, right: 0, bottom: 0, height: "72%", zIndex: 400,
+            background: "linear-gradient(to top, #060309 0%, #060309 86%, rgba(6,3,9,0) 100%)",
             transform: ready ? "translateY(100%)" : "translateY(0)",
             transition: "transform 2.6s cubic-bezier(0.5,0,0.2,1)",
             pointerEvents: ready ? "none" : "auto",
