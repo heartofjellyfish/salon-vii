@@ -56,7 +56,9 @@ export default function GalleryPage() {
         const res = await fetch("/api/exhibition");
         const data = await res.json();
         if (data.artworks) {
-          setArtworks(data.artworks);
+          // Camera faces the north wall; the south (camera) wall stays empty —
+          // drop its artwork so no painting or frame renders there.
+          setArtworks(data.artworks.filter((a: Artwork) => a.position?.wall !== "south"));
           setExhibition(data);
         }
       } catch (e) {

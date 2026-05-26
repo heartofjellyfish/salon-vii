@@ -1,41 +1,34 @@
 "use client";
 
-import { useRef } from "react";
-import * as THREE from "three";
+import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib.js";
+import { ACTIVE_LIGHTING } from "@/lib/lighting";
+
+// RectAreaLight needs its lookup textures initialised once before use.
+RectAreaLightUniformsLib.init();
 
 interface PaintingLightingProps {
   position: [number, number, number];
   facing: [number, number, number];
+  pw: number;
+  ph: number;
 }
 
-export default function PaintingLighting({ position, facing }: PaintingLightingProps) {
-  const [fx, fy, fz] = facing;
+export default function PaintingLighting({ position, facing, pw, ph }: PaintingLightingProps) {
+  const [fx, , fz] = facing;
   const [px, py, pz] = position;
-  const spotTargetRef = useRef<THREE.Object3D>(null!);
+  const { accent } = ACTIVE_LIGHTING;
 
+  // A soft area light in front of the canvas, facing the wall — a rectangular
+  // picture-light. Sized a little larger than the painting so the wash is gentle
+  // and rectangular (no elliptical spotlight scallop).
   return (
-    <group>
-      {/* RectAreaLight for painting — 35cm above, 50cm front */}
-      <rectAreaLight
-        color="#FFF5E0"
-        intensity={2.5}
-        width={1.5}
-        height={1.8}
-        position={[px + fx * 0.5, py + 0.35, pz + fz * 0.5]}
-        rotation={[0, Math.atan2(fx, fz), 0]}
-      />
-
-      {/* SpotLight for plaque — 40cm above plaque location */}
-      <spotLight
-        color="#FFD580"
-        intensity={1.0}
-        distance={6}
-        angle={0.25}
-        penumbra={0.85}
-        position={[px + fx * 0.4, py - 0.3, pz + fz * 0.4]}
-        target={spotTargetRef.current}
-      />
-      <object3D ref={spotTargetRef} position={[px, py - 0.85, pz + fz * 0.02]} />
-    </group>
+    <rectAreaLight
+      color={accent.color}
+      intensity={accent.intensity}
+      width={pw + accent.pad}
+      height={ph + accent.pad}
+      position={[px + fx * accent.frontOffset, py, pz + fz * accent.frontOffset]}
+      rotation={[0, Math.atan2(fx, fz), 0]}
+    />
   );
 }

@@ -86,6 +86,7 @@ export default function Painting({ artwork, index, saturationRefs, mode, onRevea
   };
 
   return (
+    <>
     <group ref={groupRef} position={position} rotation={rotation as any}>
       {/* Painting canvas */}
       <mesh position={[0, 0, 0.001]} onClick={handleClick} userData={{ index, artwork }}>
@@ -103,8 +104,10 @@ export default function Painting({ artwork, index, saturationRefs, mode, onRevea
         <boxGeometry args={[0.3, 0.12, 0.02]} />
       </mesh>
 
-      {/* Lights */}
-      <PaintingLighting position={position as [number, number, number]} facing={facing} />
     </group>
+
+      {/* Lights — world space, outside the painting's own transform */}
+      <PaintingLighting position={position as [number, number, number]} facing={facing} pw={pw} ph={ph} />
+    </>
   );
 }

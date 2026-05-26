@@ -3,7 +3,7 @@ export const W = 12, H = 4, D = 8;
 export const HALF_W = W / 2;
 export const BACK_Z = -6;   // north wall
 export const FRONT_Z = 2;    // south wall
-export const PAINTING_Y = 2.0;
+export const PAINTING_Y = 1.55; // museum "centre line" — hung at standing eye level
 export const NORTH_X = [-3.5, 0, 3.5];
 export const EW_Z = [-4, -1.5, 1];
 
