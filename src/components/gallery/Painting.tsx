@@ -5,6 +5,7 @@ import { useLoader, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { TextureLoader } from "three";
 import { FrameGroup, getFrameDepth, FRAME_REBATE } from "./FrameBuilders";
+import Nameplate from "./Nameplate";
 import PaintingLighting from "./PaintingLighting";
 import { getPaintingTransform, getFacingDir } from "@/lib/gallery-config";
 import type { Artwork } from "@/lib/sanity";
@@ -74,9 +75,6 @@ export default function Painting({ artwork, index, saturationRefs, mode, onRevea
     }
   }
 
-  // Plaque
-  const plaqueMat = useMemo(() => new THREE.MeshStandardMaterial({ color: 0xc9a84c, roughness: 0.3, metalness: 0.8 }), []);
-
   const satRef = useRef<{ value: number }>({ value: mode === "unguided" ? 1.0 : 0.0 });
   saturationRefs.current[index] = satRef.current;
 
@@ -104,9 +102,7 @@ export default function Painting({ artwork, index, saturationRefs, mode, onRevea
       </group>
 
       {/* Plaque */}
-      <mesh position={[0, -ph / 2 - 0.15, 0.02]} material={plaqueMat}>
-        <boxGeometry args={[0.3, 0.12, 0.02]} />
-      </mesh>
+      <Nameplate artwork={artwork} ph={ph} />
 
     </group>
 
