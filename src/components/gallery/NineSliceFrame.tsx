@@ -176,11 +176,22 @@ function getShadowTexture(): THREE.Texture {
   cv.width = S;
   cv.height = S;
   const ctx = cv.getContext("2d")!;
-  ctx.clearRect(0, 0, S, S);
-  ctx.filter = "blur(28px)";
-  ctx.fillStyle = "#000";
-  const m = 50;
-  ctx.fillRect(m, m, S - 2 * m, S - 2 * m);
+  // dark at the top (right under the frame), fading downward
+  const vg = ctx.createLinearGradient(0, 0, 0, S);
+  vg.addColorStop(0, "rgba(0,0,0,0.9)");
+  vg.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, S, S);
+  // fade the left/right ends so the band doesn't cut off hard
+  ctx.globalCompositeOperation = "destination-in";
+  const hg = ctx.createLinearGradient(0, 0, S, 0);
+  hg.addColorStop(0, "rgba(0,0,0,0)");
+  hg.addColorStop(0.18, "rgba(0,0,0,1)");
+  hg.addColorStop(0.82, "rgba(0,0,0,1)");
+  hg.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = hg;
+  ctx.fillRect(0, 0, S, S);
+  ctx.globalCompositeOperation = "source-over";
   const t = new THREE.CanvasTexture(cv);
   _shadowTex = t;
   return t;
@@ -261,30 +272,20 @@ export function NineSliceFrame({
     () => new THREE.MeshStandardMaterial({ color: edgeColor, roughness: 0.6, metalness: 0.25, side: THREE.DoubleSide }),
     [edgeColor],
   );
-  const shadowMat = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        map: getShadowTexture(),
-        color: 0x000000,
-        transparent: true,
-        opacity: 0.5,
-        depthWrite: false,
-        toneMapped: false,
-      }),
-    [],
-  );
-
   if (!frontGeo) return null;
   // back sits on the wall (z=0); front face stands `depth` proud. Painting.tsx
   // places the canvas just behind the front face so it isn't sunk in a deep well.
   const bX = pw / 2 - rebate + frameWidth;
   const bY = ph / 2 - rebate + frameWidth;
-  const drop = Math.min(depth * 1.1, 0.07); // top light → shadow falls below
+  // a shadow band hugging the bottom edge, dark at the frame and fading down
+  const shadowH = 0.22;
+  const shadowY = -bY - shadowH / 2 + 0.06;
   return (
     <group>
-      {/* fake contact shadow on the wall, offset downward */}
-      <mesh position={[0, -drop, -0.006]} material={shadowMat} renderOrder={-1}>
-        <planeGeometry args={[bX * 2 + 0.14, bY * 2 + 0.16]} />
+      {/* cast shadow below the frame (top light) — just proud of the wall */}
+      <mesh position={[0, shadowY, 0.004]} renderOrder={1}>
+        <planeGeometry args={[bX * 2 + 0.04, shadowH]} />
+        <meshBasicMaterial map={getShadowTexture()} color={0x000000} transparent opacity={0.7} depthWrite={false} toneMapped={false} />
       </mesh>
       <mesh geometry={sidesGeo} material={sidesMat} />
       <mesh geometry={frontGeo} material={frontMat} />
