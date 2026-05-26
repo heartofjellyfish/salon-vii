@@ -71,8 +71,10 @@ const NAMEPLATE_DROP = 0.19;
 const MIN_ROOM_RATIO = 1.12;
 
 // Inspect zoom stops as multiples of the bare-frame fit (entry → deepest). Step 0
-// (=1.0) is "just fits" — the whole frame fills the screen. Higher steps push in.
-const INSPECT_STEPS = [1.0, 0.82, 0.66, 0.52, 0.4];
+// (=1.0) is "just fits" — the whole frame fills the screen. The first press jumps
+// hard to 0.6 (≈1.67×) so the frame leaves the screen and you land on the painting
+// surface; later steps are finer for precise detail framing.
+const INSPECT_STEPS = [1.0, 0.6, 0.4, 0.28];
 
 // Held-arrow pan speed in screen-heights per second, so roaming feels the same
 // at every zoom. Eased for a soft start/stop.
