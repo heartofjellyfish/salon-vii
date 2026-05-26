@@ -1,3 +1,5 @@
+import FrameStylePicker from './FrameStylePicker';
+
 export default {
   name: 'artwork',
   title: 'Artwork',
@@ -24,6 +26,7 @@ export default {
       type: 'string',
       options: { list: ['baroque_gold', 'raw_wood', 'copper_slim'] },
       initialValue: 'baroque_gold',
+      components: { input: FrameStylePicker },
     },
     {
       name: 'position',
