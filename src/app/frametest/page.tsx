@@ -27,7 +27,7 @@ export default function FrameTestPage() {
       <hemisphereLight args={["#fff4e6", "#2a2030", 0.5]} />
       <directionalLight position={[-3, 2.5, 3]} intensity={2.2} color="#fff2e0" />
       <Suspense fallback={null}>
-        <Framed url="/frames/f2-avantrend233.jpg" normalUrl="/frames/f2-normal.png" fw={0.13} pw={1.4} ph={1.0} x={-2.0} />
+        <Framed url="/frames/f2-avantrend233.png" normalUrl="/frames/f2-normal.png" fw={0.13} pw={1.4} ph={1.0} x={-2.0} />
         <Framed url="/frames/f3-anaterate.png" normalUrl="/frames/f3-normal.png" fw={0.11} pw={1.4} ph={1.0} x={0} />
         <Framed url="/frames/f4-susannp4.png" normalUrl="/frames/f4-normal.png" fw={0.075} pw={1.4} ph={1.0} x={2.0} />
       </Suspense>

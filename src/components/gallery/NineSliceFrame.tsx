@@ -32,60 +32,32 @@ function detectOpening(img: HTMLImageElement): Slice | null {
   } catch {
     return null; // tainted canvas
   }
-  const at = (x: number, y: number) => {
+  // The opening is the CONTIGUOUS region at the image centre that is either
+  // transparent (cut-out PNG) or near-white (flat JPG). Expand outward from the
+  // middle so we ignore any transparent/white OUTSIDE the frame (cut-out borders).
+  const open = (x: number, y: number) => {
     const i = (y * W + x) * 4;
-    return { r: data[i], g: data[i + 1], b: data[i + 2], a: data[i + 3] };
+    const a = data[i + 3];
+    if (a < 40) return true;
+    return data[i] > 236 && data[i + 1] > 236 && data[i + 2] > 236;
   };
-
-  // 1) transparent centre → global bbox of alpha<40 pixels
-  let minX = W,
-    minY = H,
-    maxX = 0,
-    maxY = 0,
-    found = false;
-  const step = Math.max(1, Math.floor(Math.min(W, H) / 320));
-  for (let y = 0; y < H; y += step) {
-    for (let x = 0; x < W; x += step) {
-      if (data[(y * W + x) * 4 + 3] < 40) {
-        found = true;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
-    }
-  }
-
-  // 2) white centre → expand from the middle while pixels stay near-white
-  if (!found) {
-    const cx = (W / 2) | 0;
-    const cy = (H / 2) | 0;
-    const white = (x: number, y: number) => {
-      const p = at(x, y);
-      return p.a > 200 && p.r > 236 && p.g > 236 && p.b > 236;
-    };
-    if (!white(cx, cy)) return null;
-    let l = cx,
-      r = cx,
-      t = cy,
-      b = cy;
-    while (l > 0 && white(l - 1, cy)) l--;
-    while (r < W - 1 && white(r + 1, cy)) r++;
-    while (t > 0 && white(cx, t - 1)) t--;
-    while (b < H - 1 && white(cx, b + 1)) b++;
-    minX = l;
-    maxX = r;
-    minY = t;
-    maxY = b;
-    found = true;
-  }
-
-  if (!found || maxX <= minX || maxY <= minY) return null;
+  const cx = (W / 2) | 0;
+  const cy = (H / 2) | 0;
+  if (!open(cx, cy)) return null;
+  let l = cx,
+    r = cx,
+    t = cy,
+    b = cy;
+  while (l > 0 && open(l - 1, cy)) l--;
+  while (r < W - 1 && open(r + 1, cy)) r++;
+  while (t > 0 && open(cx, t - 1)) t--;
+  while (b < H - 1 && open(cx, b + 1)) b++;
+  if (r <= l || b <= t) return null;
   return {
-    su0: minX / W,
-    su1: maxX / W,
-    vTop: 1 - minY / H, // image top → high V (flipY textures)
-    vBottom: 1 - maxY / H,
+    su0: l / W,
+    su1: r / W,
+    vTop: 1 - t / H, // image top → high V (flipY textures)
+    vBottom: 1 - b / H,
   };
 }
 
