@@ -7,8 +7,8 @@ import { getFrameEnvMap, getFrameWidth } from "./FrameBuilders";
 import type { Artwork } from "@/lib/sanity";
 
 const PLATE_SRC = "/frames/nameplate.png";
-const IMG_W = 1260;
-const IMG_H = 499;
+const IMG_W = 1592;
+const IMG_H = 554;
 const PLATE_W = 0.34;
 const PLATE_H = (PLATE_W * IMG_H) / IMG_W; // match the photo's aspect
 
