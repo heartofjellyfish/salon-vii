@@ -48,6 +48,24 @@ export default function GalleryPage() {
   const [loading, setLoading] = useState(true);
   const saturationRefs = useRef<{ [key: number]: { value: number } }>({});
   const autoAdvanceRef = useRef<number | null>(null);
+  const [showHint, setShowHint] = useState(false);
+
+  // Reveal the navigation hint a beat after the room settles, then let it
+  // dismiss itself — or fade out the moment the visitor takes the wheel.
+  useEffect(() => {
+    if (loading) return;
+    const appear = setTimeout(() => setShowHint(true), 1400);
+    const vanish = setTimeout(() => setShowHint(false), 8000);
+    const dismiss = (e: KeyboardEvent) => {
+      if (e.key.startsWith("Arrow")) setShowHint(false);
+    };
+    window.addEventListener("keydown", dismiss);
+    return () => {
+      clearTimeout(appear);
+      clearTimeout(vanish);
+      window.removeEventListener("keydown", dismiss);
+    };
+  }, [loading]);
 
   // Load data from Sanity
   useEffect(() => {
@@ -207,6 +225,33 @@ export default function GalleryPage() {
           >
             →
           </button>
+        </div>
+      )}
+
+      {/* Arrow-key navigation hint */}
+      {mode === "unguided" && (
+        <div style={{
+          position: "fixed", bottom: 34, left: "50%", transform: "translateX(-50%)", zIndex: 200,
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+          opacity: showHint ? 1 : 0, transition: "opacity 1.2s ease", pointerEvents: "none",
+        }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 30px)", gridTemplateRows: "repeat(2, 30px)", gap: 5, justifyItems: "center" }}>
+            {(["", "↑", "", "←", "↓", "→"] as const).map((k, i) => (
+              <div key={i} style={{
+                visibility: k ? "visible" : "hidden",
+                width: 30, height: 30, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center",
+                border: "1px solid rgba(201,168,76,0.4)", background: "rgba(5,3,8,0.55)",
+                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                color: "#c9a84c", fontSize: 15, lineHeight: 1,
+              }}>{k}</div>
+            ))}
+          </div>
+          <span style={{
+            fontFamily: "'Cormorant Garamond', serif", fontSize: 12.5, fontStyle: "italic",
+            letterSpacing: "0.04em", color: "rgba(201,168,76,0.72)", whiteSpace: "nowrap",
+          }}>
+            方向键漫步展厅 · use the arrow keys to wander
+          </span>
         </div>
       )}
 
