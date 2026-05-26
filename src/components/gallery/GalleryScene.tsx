@@ -24,9 +24,10 @@ const VIEW_DIST = 3.2; // metres back from the wall — close, comfortable viewi
 const EYE_Y = 1.55; // standing eye level = painting centre line (level sightline)
 
 // Forward/back dolly presets (metres from the wall), nearest → farthest.
-// Index 2 is the default comfortable viewing distance (= VIEW_DIST).
+// Start on the farthest preset (last index) — pulled back enough to see the bench.
 const DEPTH_PRESETS = [0.45, 0.7, 1.1, 1.7, 2.4, VIEW_DIST, 4.6, 6.4];
-const DEFAULT_DEPTH_INDEX = 5;
+const DEFAULT_DEPTH_INDEX = DEPTH_PRESETS.length - 1;
+const DEFAULT_DEPTH = DEPTH_PRESETS[DEFAULT_DEPTH_INDEX];
 
 interface Anchor {
   camPos: [number, number, number];
@@ -106,8 +107,8 @@ function AnchorControls({ anchors, start, active }: { anchors: Anchor[]; start: 
   const easeLambda = useRef(11);
 
   // Forward/back dolly distance from the wall, eased toward depthTarget.
-  const depth = useRef(VIEW_DIST);
-  const depthTarget = useRef(VIEW_DIST);
+  const depth = useRef(DEFAULT_DEPTH);
+  const depthTarget = useRef(DEFAULT_DEPTH);
   const depthIndex = useRef(DEFAULT_DEPTH_INDEX);
 
   useEffect(() => {
