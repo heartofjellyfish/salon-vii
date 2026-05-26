@@ -1,15 +1,16 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { getFrameEnvMap, getFrameWidth } from "./FrameBuilders";
 import type { Artwork } from "@/lib/sanity";
 
+const PLATE_SRC = "/frames/nameplate.png";
+const IMG_W = 1260;
+const IMG_H = 499;
 const PLATE_W = 0.34;
-const PLATE_H = 0.12;
-const CW = 480;
-const CH = Math.round((CW * PLATE_H) / PLATE_W); // keep texel aspect square
+const PLATE_H = (PLATE_W * IMG_H) / IMG_W; // match the photo's aspect
 
 // Derive a tangent-space normal map from a grayscale height canvas (Sobel).
 function heightToNormal(height: HTMLCanvasElement, strength: number): THREE.CanvasTexture {
@@ -45,101 +46,80 @@ function heightToNormal(height: HTMLCanvasElement, strength: number): THREE.Canv
   return tex;
 }
 
+// Two centred lines inside the plate's flat engraving field.
 function drawText(ctx: CanvasRenderingContext2D, title: string, sub: string, ink: string) {
   ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
   ctx.fillStyle = ink;
-  ctx.font = `600 ${Math.round(CH * 0.26)}px Georgia, "Times New Roman", serif`;
-  ctx.fillText(title, CW / 2, CH * 0.42, CW * 0.86);
-  ctx.font = `italic 400 ${Math.round(CH * 0.17)}px Georgia, "Times New Roman", serif`;
-  ctx.fillText(sub, CW / 2, CH * 0.74, CW * 0.86);
-}
-
-function makeTextures() {
-  // --- Base colour: brushed brass with subtle horizontal grain ---
-  const base = document.createElement("canvas");
-  base.width = CW;
-  base.height = CH;
-  const b = base.getContext("2d")!;
-  const grad = b.createLinearGradient(0, 0, 0, CH);
-  grad.addColorStop(0, "#d8b977");
-  grad.addColorStop(0.5, "#b58f44");
-  grad.addColorStop(1, "#8f6e30");
-  b.fillStyle = grad;
-  b.fillRect(0, 0, CW, CH);
-  // horizontal brushed streaks
-  for (let i = 0; i < 1400; i++) {
-    const y = Math.random() * CH;
-    const x = Math.random() * CW;
-    const len = 20 + Math.random() * 80;
-    b.strokeStyle = `rgba(255,240,210,${Math.random() * 0.05})`;
-    b.lineWidth = Math.random() < 0.5 ? 1 : 2;
-    b.beginPath();
-    b.moveTo(x, y);
-    b.lineTo(x + len, y + (Math.random() - 0.5));
-    b.stroke();
-  }
-  // beveled inner border
-  b.strokeStyle = "rgba(60,40,15,0.5)";
-  b.lineWidth = 3;
-  b.strokeRect(6, 6, CW - 12, CH - 12);
-  b.strokeStyle = "rgba(255,245,215,0.4)";
-  b.lineWidth = 1;
-  b.strokeRect(9, 9, CW - 18, CH - 18);
-
-  // --- Height field: flat plate, recessed (dark) engraved text + border ---
-  const height = document.createElement("canvas");
-  height.width = CW;
-  height.height = CH;
-  const h = height.getContext("2d")!;
-  h.fillStyle = "#bdbdbd"; // mid plate level
-  h.fillRect(0, 0, CW, CH);
-  // engraved border channel
-  h.strokeStyle = "#3a3a3a";
-  h.lineWidth = 4;
-  h.strokeRect(7, 7, CW - 14, CH - 14);
-
-  return { base, height, b, h };
+  ctx.font = `600 ${Math.round(IMG_H * 0.17)}px Georgia, "Times New Roman", serif`;
+  ctx.fillText(title, IMG_W / 2, IMG_H * 0.44, IMG_W * 0.66);
+  ctx.font = `italic 400 ${Math.round(IMG_H * 0.1)}px Georgia, "Times New Roman", serif`;
+  ctx.fillText(sub, IMG_W / 2, IMG_H * 0.62, IMG_W * 0.66);
 }
 
 export default function Nameplate({ artwork, ph }: { artwork: Artwork; ph: number }) {
   const gl = useThree((s) => s.gl);
+  const [material, setMaterial] = useState<THREE.MeshStandardMaterial | null>(null);
 
-  const { material } = useMemo(() => {
-    const title = artwork.titleCN || artwork.title || "";
-    const sub = [artwork.artist || "Vincent van Gogh", artwork.year]
-      .filter(Boolean)
-      .join(" · ");
+  const title = artwork.titleCN || artwork.title || "";
+  const sub = [artwork.artist || "Vincent van Gogh", artwork.year].filter(Boolean).join(" · ");
 
-    const { base, height, b, h } = makeTextures();
-    // colour: darken engraved text into the brass
-    drawText(b, title, sub, "rgba(70,48,18,0.85)");
-    // height: engrave text as recessed (dark)
-    drawText(h, title, sub, "#454545");
+  useEffect(() => {
+    let disposed = false;
+    const img = new Image();
+    img.onload = () => {
+      if (disposed) return;
+      // Colour map = photo + engraved text painted into the flat field.
+      const base = document.createElement("canvas");
+      base.width = IMG_W;
+      base.height = IMG_H;
+      const b = base.getContext("2d")!;
+      b.drawImage(img, 0, 0, IMG_W, IMG_H);
+      drawText(b, title, sub, "rgba(70,48,18,0.9)");
+      const colorTex = new THREE.CanvasTexture(base);
+      colorTex.colorSpace = THREE.SRGBColorSpace;
+      colorTex.anisotropy = gl.capabilities.getMaxAnisotropy();
 
-    const colorTex = new THREE.CanvasTexture(base);
-    colorTex.colorSpace = THREE.SRGBColorSpace;
-    colorTex.anisotropy = gl.capabilities.getMaxAnisotropy();
-    const normalTex = heightToNormal(height, 2.2);
-    normalTex.anisotropy = colorTex.anisotropy;
+      // Height field = flat plate with recessed (dark) text -> normal map so the
+      // lettering catches the painting spotlights.
+      const hc = document.createElement("canvas");
+      hc.width = IMG_W;
+      hc.height = IMG_H;
+      const h = hc.getContext("2d")!;
+      h.fillStyle = "#bdbdbd";
+      h.fillRect(0, 0, IMG_W, IMG_H);
+      drawText(h, title, sub, "#4a4a4a");
+      const normalTex = heightToNormal(hc, 2.0);
+      normalTex.anisotropy = colorTex.anisotropy;
 
-    const mat = new THREE.MeshStandardMaterial({
-      map: colorTex,
-      normalMap: normalTex,
-      normalScale: new THREE.Vector2(0.6, 0.6),
-      metalness: 0.85,
-      roughness: 0.42,
-      envMap: getFrameEnvMap(gl),
-      envMapIntensity: 0.8,
-    });
-    return { material: mat };
-  }, [artwork.title, artwork.titleCN, artwork.artist, artwork.year, gl]);
+      setMaterial(
+        new THREE.MeshStandardMaterial({
+          map: colorTex,
+          normalMap: normalTex,
+          normalScale: new THREE.Vector2(0.5, 0.5),
+          transparent: true,
+          alphaTest: 0.5,
+          metalness: 0.55,
+          roughness: 0.45,
+          envMap: getFrameEnvMap(gl),
+          envMapIntensity: 0.6,
+        })
+      );
+    };
+    img.src = PLATE_SRC;
+    return () => {
+      disposed = true;
+    };
+  }, [title, sub, gl]);
 
-  // Drop the plaque clear of the frame's outer molding, with a small gap.
+  if (!material) return null;
+
+  // Sit the plaque just below the frame's outer molding, with a small gap.
   const plateY = -(ph / 2 + getFrameWidth(artwork.frameStyle) + 0.07 + PLATE_H / 2);
 
   return (
-    <mesh position={[0, plateY, 0.018]} material={material}>
-      <boxGeometry args={[PLATE_W, PLATE_H, 0.012]} />
+    <mesh position={[0, plateY, 0.02]} material={material}>
+      <planeGeometry args={[PLATE_W, PLATE_H]} />
     </mesh>
   );
 }
