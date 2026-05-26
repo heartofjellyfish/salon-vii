@@ -18,7 +18,7 @@ type FrameOption = {
 };
 
 const FRAMES: FrameOption[] = [
-  { value: "baroque_gold", label: "巴洛克金框", sub: "Ornate Baroque gilt", src: "/static/frames/f2-avantrend233.jpg", borderWidth: 26 },
+  { value: "baroque_gold", label: "巴洛克金框", sub: "Ornate Baroque gilt", src: "/static/frames/f2-baroque.png", borderWidth: 26 },
   { value: "raw_wood", label: "青铜木框", sub: "Rustic bronze / wood", src: "/static/frames/f3-anaterate.png", borderWidth: 24 },
   { value: "copper_slim", label: "细金框", sub: "Simple slim gilt", src: "/static/frames/f4-susannp4.png", borderWidth: 16 },
   { value: "classic_gold", label: "古典金框", sub: "Smooth classic gilt", src: "/static/frames/f5-classic-gold.png", borderWidth: 20 },
@@ -51,39 +51,26 @@ function detectSlice(src: string): Promise<string> {
         if (!ctx) return resolve(FALLBACK);
         ctx.drawImage(img, 0, 0);
         const data = ctx.getImageData(0, 0, W, H).data;
-        let minX = W, minY = H, maxX = 0, maxY = 0, found = false;
-        const step = Math.max(1, Math.floor(Math.min(W, H) / 320));
-        for (let y = 0; y < H; y += step) {
-          for (let x = 0; x < W; x += step) {
-            if (data[(y * W + x) * 4 + 3] < 40) {
-              found = true;
-              if (x < minX) minX = x;
-              if (x > maxX) maxX = x;
-              if (y < minY) minY = y;
-              if (y > maxY) maxY = y;
-            }
-          }
-        }
-        if (!found) {
-          const cx = W >> 1, cy = H >> 1;
-          const white = (x: number, y: number) => {
-            const i = (y * W + x) * 4;
-            return data[i + 3] > 200 && data[i] > 236 && data[i + 1] > 236 && data[i + 2] > 236;
-          };
-          if (white(cx, cy)) {
-            let l = cx, r = cx, t = cy, b = cy;
-            while (l > 0 && white(l - 1, cy)) l--;
-            while (r < W - 1 && white(r + 1, cy)) r++;
-            while (t > 0 && white(cx, t - 1)) t--;
-            while (b < H - 1 && white(cx, b + 1)) b++;
-            minX = l; maxX = r; minY = t; maxY = b; found = true;
-          }
-        }
-        if (!found || maxX <= minX || maxY <= minY) return resolve(FALLBACK);
-        const top = Math.round((minY / H) * 100);
-        const right = Math.round(((W - maxX) / W) * 100);
-        const bottom = Math.round(((H - maxY) / H) * 100);
-        const left = Math.round((minX / W) * 100);
+        // centre-out: expand from the middle while transparent (cut-out PNG) or
+        // near-white (flat JPG). Finds the OPENING only, ignoring any transparent
+        // border / rounded corners outside the frame (which broke the old bbox).
+        const open = (x: number, y: number) => {
+          const i = (y * W + x) * 4;
+          if (data[i + 3] < 40) return true;
+          return data[i] > 236 && data[i + 1] > 236 && data[i + 2] > 236;
+        };
+        const cx = W >> 1, cy = H >> 1;
+        if (!open(cx, cy)) return resolve(FALLBACK);
+        let l = cx, r = cx, t = cy, b = cy;
+        while (l > 0 && open(l - 1, cy)) l--;
+        while (r < W - 1 && open(r + 1, cy)) r++;
+        while (t > 0 && open(cx, t - 1)) t--;
+        while (b < H - 1 && open(cx, b + 1)) b++;
+        if (r <= l || b <= t) return resolve(FALLBACK);
+        const top = Math.round((t / H) * 100);
+        const right = Math.round(((W - r) / W) * 100);
+        const bottom = Math.round(((H - b) / H) * 100);
+        const left = Math.round((l / W) * 100);
         resolve(`${top}% ${right}% ${bottom}% ${left}%`);
       } catch {
         resolve(FALLBACK);
