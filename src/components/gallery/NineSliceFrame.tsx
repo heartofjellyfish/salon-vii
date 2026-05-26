@@ -166,6 +166,26 @@ function buildFrameSides(pw: number, ph: number, frameWidth: number, rebate: num
   return geo;
 }
 
+// A soft blurred dark blob used as a fake contact/drop shadow on the wall. The
+// gallery's RectAreaLight + hemisphere can't cast real shadows, so we paint one.
+let _shadowTex: THREE.Texture | null = null;
+function getShadowTexture(): THREE.Texture {
+  if (_shadowTex) return _shadowTex;
+  const S = 256;
+  const cv = document.createElement("canvas");
+  cv.width = S;
+  cv.height = S;
+  const ctx = cv.getContext("2d")!;
+  ctx.clearRect(0, 0, S, S);
+  ctx.filter = "blur(28px)";
+  ctx.fillStyle = "#000";
+  const m = 50;
+  ctx.fillRect(m, m, S - 2 * m, S - 2 * m);
+  const t = new THREE.CanvasTexture(cv);
+  _shadowTex = t;
+  return t;
+}
+
 export interface NineSliceFrameProps {
   texture: THREE.Texture;
   pw: number;
@@ -241,12 +261,31 @@ export function NineSliceFrame({
     () => new THREE.MeshStandardMaterial({ color: edgeColor, roughness: 0.6, metalness: 0.25, side: THREE.DoubleSide }),
     [edgeColor],
   );
+  const shadowMat = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        map: getShadowTexture(),
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.5,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    [],
+  );
 
   if (!frontGeo) return null;
   // back sits on the wall (z=0); front face stands `depth` proud. Painting.tsx
   // places the canvas just behind the front face so it isn't sunk in a deep well.
+  const bX = pw / 2 - rebate + frameWidth;
+  const bY = ph / 2 - rebate + frameWidth;
+  const drop = Math.min(depth * 1.1, 0.07); // top light → shadow falls below
   return (
     <group>
+      {/* fake contact shadow on the wall, offset downward */}
+      <mesh position={[0, -drop, -0.006]} material={shadowMat} renderOrder={-1}>
+        <planeGeometry args={[bX * 2 + 0.14, bY * 2 + 0.16]} />
+      </mesh>
       <mesh geometry={sidesGeo} material={sidesMat} />
       <mesh geometry={frontGeo} material={frontMat} />
     </group>
