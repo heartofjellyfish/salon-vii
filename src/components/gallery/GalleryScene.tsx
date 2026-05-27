@@ -15,6 +15,7 @@ import type { Artwork } from "@/lib/sanity";
 export interface InspectApi {
   setZoomDir: (dir: -1 | 0 | 1) => void; // hold-to-zoom: +1 in, -1 out (past fit = exit), 0 stop
   exit: () => void;
+  inspectIndex: (artworkIndex: number) => void; // tap a painting → walk to it and look closely
 }
 
 // Which control set the keys currently drive, so the UI can flash the right hint
@@ -264,6 +265,13 @@ function AnchorControls({
   const panYTarget = useRef(0);
   const heldKeys = useRef<Set<string>>(new Set());
 
+  // Published each frame for touch gestures: metres-per-screen-pixel at the
+  // current depth (so a one-finger drag moves the work 1:1 under the finger) and
+  // the current pan extents (so the drag clamps to the framed edges).
+  const panMpp = useRef(0.01);
+  const maxXRef = useRef(0);
+  const maxYRef = useRef(0);
+
   const sizeRef = useRef(size);
   sizeRef.current = size;
 
@@ -329,6 +337,14 @@ function AnchorControls({
     onInspectingChange?.(false);
   };
 
+  // Tap-to-inspect (touch): slide to face the tapped painting, then look closely.
+  const inspectIndex = (artworkIndex: number) => {
+    if (inspecting.current) return;
+    const anchorIdx = anchors.findIndex((a) => a.artworkIndex === artworkIndex);
+    if (anchorIdx >= 0) targetU.current = U[anchorIdx];
+    enterInspect();
+  };
+
   // Press/hold zoom. dir = +1 in, -1 out, 0 = release. A press starts a continuous
   // glide right away; releasing within TAP_MS turns it into a single clean notch
   // (so a quick tap is a deliberate step, a hold is a smooth ride). From the room
@@ -368,7 +384,7 @@ function AnchorControls({
   // Expose zoom/exit so the DOM zoom buttons can drive the 3D camera.
   useEffect(() => {
     if (!inspectApi) return;
-    inspectApi.current = { setZoomDir, exit: exitInspect };
+    inspectApi.current = { setZoomDir, exit: exitInspect, inspectIndex };
     return () => {
       inspectApi.current = null;
     };
@@ -382,38 +398,127 @@ function AnchorControls({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
-  // Pointer drag — room mode only (disabled while inspecting).
+  // Pointer / touch gestures. In the room a one-pointer horizontal drag walks
+  // along the wall (mouse or finger). In "look closely" one finger pans the
+  // magnifier 1:1, two fingers pinch-zoom, and at the whole-frame view a clear
+  // pull-down or a hard pinch-in closes inspect. touch-action:none so the browser
+  // never steals a gesture to scroll or page-zoom the canvas.
   useEffect(() => {
     const el = gl.domElement;
     el.style.cursor = active ? "grab" : "default";
+    el.style.touchAction = "none";
+
+    const pointers = new Map<number, { x: number; y: number }>();
+    let gesture: "none" | "drag" | "pan" | "pinch" = "none";
+    let dragId = -1; // the one pointer that owns a room drag (ignore a stray 2nd finger)
+    let startY = 0; // finger origin, for pull-down-to-exit at the whole frame
+    let panFromX = 0, panFromY = 0; // finger origin of the active pan
+    let panBaseX = 0, panBaseY = 0; // pan target when this pan began
+    let pinchFromDist = 0, pinchFromRatio = 1;
+
+    const live = () => [...pointers.values()];
+    const spread = () => { const p = live(); return Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); };
+    const beginPan = (x: number, y: number) => {
+      gesture = "pan";
+      panFromX = x; panFromY = y;
+      panBaseX = panXTarget.current; panBaseY = panYTarget.current;
+      heldKeys.current.clear();
+    };
+
     const onDown = (e: PointerEvent) => {
-      if (!active || inspecting.current) return;
-      dragging.current = true;
-      lastX.current = e.clientX;
-      el.style.cursor = "grabbing";
+      if (!active) return;
+      // Inspect-mode pan/pinch are touch (or pen) gestures only — a desktop mouse
+      // in "look closely" keeps its original behaviour untouched (arrows pan,
+      // click → lightbox). The room drag stays available to mouse and finger alike.
+      const touchy = e.pointerType !== "mouse";
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 1) {
+        startY = e.clientY;
+        if (inspecting.current) {
+          if (touchy) beginPan(e.clientX, e.clientY);
+        } else {
+          gesture = "drag";
+          dragId = e.pointerId;
+          dragging.current = true;
+          lastX.current = e.clientX;
+          el.style.cursor = "grabbing";
+        }
+      } else if (pointers.size === 2 && inspecting.current && touchy) {
+        gesture = "pinch";
+        dragging.current = false;
+        pinchFromDist = spread() || 1;
+        pinchFromRatio = inspectRatio.current;
+        zoomDir.current = 0;
+        pressDir.current = 0;
+      }
     };
+
     const onMove = (e: PointerEvent) => {
-      if (!dragging.current || !active || inspecting.current) return;
-      const dx = e.clientX - lastX.current;
-      lastX.current = e.clientX;
-      u.current = THREE.MathUtils.clamp(u.current + dx * 0.018, 0, total); // free 1:1 follow
-      targetU.current = u.current;
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (gesture === "drag") {
+        if (!dragging.current || e.pointerId !== dragId) return;
+        const dx = e.clientX - lastX.current;
+        lastX.current = e.clientX;
+        u.current = THREE.MathUtils.clamp(u.current + dx * 0.018, 0, total); // free 1:1 follow
+        targetU.current = u.current;
+      } else if (gesture === "pan") {
+        const mpp = panMpp.current;
+        const dx = e.clientX - panFromX;
+        const dy = e.clientY - panFromY;
+        // Grab the canvas: drag right reveals the left edge, drag down the top.
+        panXTarget.current = THREE.MathUtils.clamp(panBaseX - dx * mpp, -maxXRef.current, maxXRef.current);
+        panYTarget.current = THREE.MathUtils.clamp(panBaseY + dy * mpp, -maxYRef.current, maxYRef.current);
+        panX.current = panXTarget.current; // 1:1 under the finger, no easing lag
+        panY.current = panYTarget.current;
+        if (inspectRatio.current >= 0.985 && e.clientY - startY > 90) {
+          exitInspect(); // whole frame + a clear pull-down = step back to the room
+          pointers.clear();
+          gesture = "none";
+        }
+      } else if (gesture === "pinch" && pointers.size >= 2) {
+        const raw = pinchFromRatio * (pinchFromDist / (spread() || 1)); // fingers apart → zoom in
+        if (raw > 1.12 && pinchFromRatio >= 0.98) {
+          exitInspect(); // a hard pinch-in at the whole frame closes "look closely"
+          pointers.clear();
+          gesture = "none";
+        } else {
+          inspectRatio.current = THREE.MathUtils.clamp(raw, minRatio.current, 1);
+        }
+      }
     };
-    const onUp = () => {
-      if (!dragging.current) return;
-      dragging.current = false;
-      el.style.cursor = active ? "grab" : "default";
-      easeLambda.current = 11; // crisp settle on release
-      targetU.current = U[nearestAnchorIndex()];
+
+    const endPointer = (e: PointerEvent) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.delete(e.pointerId);
+      if (gesture === "drag") {
+        dragging.current = false;
+        el.style.cursor = active ? "grab" : "default";
+        easeLambda.current = 11; // crisp settle on release
+        targetU.current = U[nearestAnchorIndex()];
+        gesture = "none";
+      } else if (gesture === "pinch") {
+        // Two → one finger continues as a pan with the survivor.
+        if (pointers.size === 1) beginPan(live()[0].x, live()[0].y);
+        else gesture = "none";
+      } else if (gesture === "pan") {
+        if (pointers.size >= 1) beginPan(live()[0].x, live()[0].y);
+        else gesture = "none";
+      }
     };
+
     el.addEventListener("pointerdown", onDown);
     window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointerup", endPointer);
+    window.addEventListener("pointercancel", endPointer);
     return () => {
       el.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointerup", endPointer);
+      window.removeEventListener("pointercancel", endPointer);
     };
+    // exitInspect / nearestAnchorIndex only read refs, so a one-time bind is safe.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gl, active, U, total]);
 
   // Keyboard.
@@ -603,6 +708,10 @@ function AnchorControls({
       panXTarget.current = 0;
       panYTarget.current = 0;
     }
+    // Publish for the touch pan handler (metres per screen pixel + pan extents).
+    panMpp.current = (2 * vHalf) / Math.max(1, sizeRef.current.height);
+    maxXRef.current = maxX;
+    maxYRef.current = maxY;
     panXTarget.current = THREE.MathUtils.clamp(panXTarget.current, -maxX, maxX);
     panYTarget.current = THREE.MathUtils.clamp(panYTarget.current, -maxY, maxY);
     panX.current = THREE.MathUtils.damp(panX.current, panXTarget.current, 12, dt);

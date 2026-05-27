@@ -99,10 +99,12 @@ function InspectMinimap({
   imageUrl,
   dims,
   viewRef,
+  isTouch,
 }: {
   imageUrl: string;
   dims: { pw: number; ph: number; frameWidth: number };
   viewRef: React.MutableRefObject<{ cx: number; cy: number; w: number; h: number } | null>;
+  isTouch: boolean;
 }) {
   const rectRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -141,9 +143,14 @@ function InspectMinimap({
   const insetX = (fw / framedW) * 100; // frame thickness as % of the framed box
   const insetY = (fw / framedH) * 100;
 
+  // Desktop: bottom-left. Touch: top-left — the control bar lives bottom-centre on
+  // a phone, so a bottom-left minimap would collide with its left button.
+  const place: React.CSSProperties = isTouch
+    ? { top: "calc(16px + env(safe-area-inset-top))", left: "calc(16px + env(safe-area-inset-left))" }
+    : { bottom: 18, left: 18 };
   return (
     <div style={{
-      position: "fixed", left: 18, bottom: 18, zIndex: 205, pointerEvents: "none",
+      position: "fixed", ...place, zIndex: 205, pointerEvents: "none",
       padding: 5, borderRadius: 4, background: "rgba(5,3,8,0.5)",
       border: "1px solid rgba(201,168,76,0.28)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
       boxShadow: "0 6px 20px rgba(0,0,0,0.4)",
@@ -224,6 +231,13 @@ const CONTROL_HINTS: Record<"roam" | "entry" | "cropped", { keys: string[]; labe
   cropped: [{ keys: ["↑", "↓", "←", "→"], label: "移动" }, { keys: ["Esc"], label: "退出" }],
 };
 
+// Touch has no keyboard, so the same phases get gesture hints instead of key pills.
+const TOUCH_HINTS: Record<"roam" | "entry" | "cropped", string> = {
+  roam: "左右滑动漫步 · 轻触画作贴近看",
+  entry: "拖动平移 · 双指缩放 · 下滑退出",
+  cropped: "拖动漫游 · 双指缩放 · 下滑退出",
+};
+
 const HINT_PILL: React.CSSProperties = {
   minWidth: 24, height: 24, padding: "0 5px", borderRadius: 6,
   display: "flex", alignItems: "center", justifyContent: "center",
@@ -253,38 +267,52 @@ function ControlBar({
   onToggleMinimap,
   musicOn,
   onToggleMusic,
+  isTouch,
 }: {
   phase: "roam" | "entry" | "cropped";
   show: boolean;
   inspecting: boolean;
-  api: React.MutableRefObject<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void } | null>;
+  api: React.MutableRefObject<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void; inspectIndex: (artworkIndex: number) => void } | null>;
   minimapOn: boolean;
   onToggleMinimap: () => void;
   musicOn: boolean;
   onToggleMusic: () => void;
+  isTouch: boolean;
 }) {
+  // Touch has no hover to summon the bar back, so the buttons stay reachable (the
+  // bar sits up); the hint line still only flashes (show) so it doesn't sit over
+  // the work while you examine it.
+  const barUp = show || isTouch;
+  const tBtnSize: React.CSSProperties = isTouch ? { width: 42, height: 42 } : {};
   return (
     <div style={{
-      position: "fixed", bottom: 22, left: 0, right: 0, zIndex: 210,
+      // On touch the bar sits a row higher so its right-hand button clears the
+      // bottom-right mode toggle on a narrow phone; on desktop it hugs the bottom.
+      position: "fixed", bottom: isTouch ? "calc(84px + env(safe-area-inset-bottom))" : "calc(22px + env(safe-area-inset-bottom))", left: 0, right: 0, zIndex: 210,
       display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
-      opacity: show ? 1 : 0, transition: "opacity 0.45s ease", pointerEvents: "none",
+      opacity: barUp ? 1 : 0, transition: "opacity 0.45s ease", pointerEvents: "none",
     }}>
-      {/* Contextual key hints — change per phase. They sit ABOVE the buttons so the
-          buttons never shift when the hints change. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        {CONTROL_HINTS[phase].map((item, i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <div style={{ display: "flex", gap: 4 }}>
-              {item.keys.map((k) => <span key={k} style={HINT_PILL}>{k}</span>)}
+      {/* Contextual hints — keyboard key pills on desktop, gesture text on touch.
+          They sit ABOVE the buttons so the buttons never shift when hints change,
+          and only show on the flash (show) so they don't linger over the art. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, opacity: show ? 1 : 0, transition: "opacity 0.45s ease" }}>
+        {isTouch ? (
+          <span style={HINT_LABEL}>{TOUCH_HINTS[phase]}</span>
+        ) : (
+          CONTROL_HINTS[phase].map((item, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                {item.keys.map((k) => <span key={k} style={HINT_PILL}>{k}</span>)}
+              </div>
+              <span style={HINT_LABEL}>{item.label}</span>
             </div>
-            <span style={HINT_LABEL}>{item.label}</span>
-          </div>
-        ))}
+          ))
+        )}
       </div>
       {/* Fixed control buttons — the SAME buttons in the SAME place every phase, so
           muscle memory holds (zoom never jumps). Inactive controls dim in place
           instead of disappearing. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, pointerEvents: show ? "auto" : "none" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: isTouch ? 14 : 10, pointerEvents: barUp ? "auto" : "none" }}>
         {([["−", -1], ["+", 1]] as const).map(([label, dir]) => (
           <button
             key={label}
@@ -294,7 +322,7 @@ function ControlBar({
             onPointerLeave={() => api.current?.setZoomDir(0)}
             onPointerCancel={() => api.current?.setZoomDir(0)}
             aria-label={dir === 1 ? "zoom in" : "zoom out"}
-            style={{ ...ZOOM_BTN, opacity: inspecting ? 1 : 0.3, cursor: inspecting ? "pointer" : "default" }}
+            style={{ ...ZOOM_BTN, ...tBtnSize, fontSize: isTouch ? "1.45rem" : ZOOM_BTN.fontSize, opacity: inspecting ? 1 : 0.3, cursor: inspecting ? "pointer" : "default" }}
           >{label}</button>
         ))}
         <button
@@ -303,7 +331,7 @@ function ControlBar({
           aria-label="toggle thumbnail"
           title="缩略图"
           style={{
-            ...ZOOM_BTN, fontSize: 14,
+            ...ZOOM_BTN, ...tBtnSize, fontSize: isTouch ? 18 : 14,
             opacity: inspecting ? 1 : 0.3, cursor: inspecting ? "pointer" : "default",
             borderColor: minimapOn && inspecting ? "rgba(245,222,140,0.95)" : "rgba(201,168,76,0.4)",
             background: minimapOn && inspecting ? "rgba(201,168,76,0.22)" : "rgba(5,3,8,0.6)",
@@ -316,7 +344,7 @@ function ControlBar({
           aria-label="toggle music"
           title={musicOn ? "音乐 · 关" : "音乐 · 开"}
           style={{
-            ...ZOOM_BTN, fontSize: 15,
+            ...ZOOM_BTN, ...tBtnSize, fontSize: isTouch ? 19 : 15,
             borderColor: musicOn ? "rgba(245,222,140,0.95)" : "rgba(201,168,76,0.5)",
             background: musicOn ? "rgba(201,168,76,0.22)" : "rgba(5,3,8,0.6)",
           }}
@@ -347,7 +375,7 @@ export default function GalleryPage() {
   const [musicOn, setMusicOn] = useState(false); // ambient soundtrack on/off (off until the visitor asks)
   const audioRef = useRef<HTMLAudioElement>(null);
   const musicFadeRaf = useRef(0);
-  const inspectApi = useRef<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void } | null>(null);
+  const inspectApi = useRef<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void; inspectIndex: (artworkIndex: number) => void } | null>(null);
   const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number; loadedW?: number; loadedH?: number } }>({});
   const viewRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
   // ?debug — show a small resolution readout for the inspected painting (hidden
@@ -357,6 +385,19 @@ export default function GalleryPage() {
   // Flash a fresh hint whenever it changes so the visitor always knows the keys.
   const [controlPhase, setControlPhase] = useState<"roam" | "entry" | "cropped">("roam");
   const [hintsOn, setHintsOn] = useState(false);
+  const [isTouch, setIsTouch] = useState(false); // coarse pointer → touch model & always-reachable controls
+
+  // Coarse pointer (phone / tablet): no hover to summon the control bar back, so
+  // keep it reachable; and swap the keyboard hints for gesture hints. ?touch forces
+  // it on for testing where a desktop reports a fine pointer.
+  useEffect(() => {
+    const forced = new URLSearchParams(window.location.search).has("touch");
+    const mq = window.matchMedia("(pointer: coarse)");
+    const apply = () => setIsTouch(forced || mq.matches);
+    apply();
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
+  }, []);
 
   // Inspect-mode vignette — ellipse on a landscape screen, circle on portrait
   // (so a landscape canvas keeps its sides clear instead of being pinched).
@@ -502,9 +543,15 @@ export default function GalleryPage() {
   }, [mode, revealNext]);
 
   const handleArtworkClick = useCallback((index: number, artwork: Artwork) => {
+    // On touch in free mode, a tap means "look closely" (the signature 3D zoom),
+    // not the flat lightbox. Desktop / guided keep the click→lightbox behaviour.
+    if (isTouch && mode === "unguided") {
+      inspectApi.current?.inspectIndex(index);
+      return;
+    }
     setLightboxOpen(true);
     setActiveArtwork({ index, artwork });
-  }, []);
+  }, [isTouch, mode]);
 
   // Toggle the ambient soundtrack. The click itself is the user gesture browsers
   // require before audio may start, so play() succeeds the first time. Volume eases
@@ -601,7 +648,7 @@ export default function GalleryPage() {
 
       {/* Curator Panel */}
       <div style={{
-        position: "fixed", top: 16, right: 16, zIndex: 200, display: "flex", alignItems: "center", gap: 8,
+        position: "fixed", top: "calc(16px + env(safe-area-inset-top))", right: "calc(16px + env(safe-area-inset-right))", zIndex: 200, display: "flex", alignItems: "center", gap: 8,
         opacity: 1, transition: "opacity 1s ease 3s",
       }}>
         <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, #c9a84c, #8b6914)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#2a1a08", fontWeight: 600 }}>VII</div>
@@ -675,6 +722,7 @@ export default function GalleryPage() {
           onToggleMinimap={() => setShowMinimap((v) => !v)}
           musicOn={musicOn}
           onToggleMusic={handleToggleMusic}
+          isTouch={isTouch}
         />
       )}
 
@@ -711,6 +759,7 @@ export default function GalleryPage() {
           imageUrl={artworks[inspectedIndex].imageUrl as string}
           dims={paintingDimsRef.current[inspectedIndex] ?? { pw: 1, ph: 1, frameWidth: 0.09 }}
           viewRef={viewRef}
+          isTouch={isTouch}
         />
       )}
 
@@ -723,7 +772,7 @@ export default function GalleryPage() {
       <button
         onClick={handleModeToggle}
         style={{
-          position: "fixed", bottom: 20, right: 16, zIndex: 210, display: "flex", alignItems: "center", gap: 6,
+          position: "fixed", bottom: "calc(20px + env(safe-area-inset-bottom))", right: "calc(16px + env(safe-area-inset-right))", zIndex: 210, display: "flex", alignItems: "center", gap: 6,
           padding: "8px 14px", borderRadius: 20, background: "rgba(5,3,8,0.6)", backdropFilter: "blur(8px)",
           WebkitBackdropFilter: "blur(8px)", border: "1px solid rgba(201,168,76,0.3)", cursor: "pointer",
           color: "#c9a84c", fontFamily: "'Cormorant Garamond', serif", fontSize: 13, fontWeight: 400,

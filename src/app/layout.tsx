@@ -1,9 +1,20 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Salon VII — Salle I | Van Gogh: The Wrong Man at the Right Time",
   description: "A digital art salon. Ten Van Gogh paintings. Zero buyers in his lifetime. One hundred and thirty years of the last laugh.",
+};
+
+// Full-screen immersive canvas: own every touch gesture (pinch-to-zoom lives
+// inside "look closely"), so the browser never page-zooms or rubber-bands over
+// the 3D view, and the layout fills past the notch.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

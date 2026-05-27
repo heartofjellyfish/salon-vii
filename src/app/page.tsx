@@ -220,7 +220,7 @@ export default function HomePage() {
               }} />
 
               {/* enter hint — near the far opening, drawing the eye down the passage */}
-              <div style={{
+              <div className="sv-enter-hint" style={{
                 position: "absolute", left: 0, right: 0, bottom: "12%", zIndex: 2, textAlign: "center",
                 color: "rgba(228,212,190,0.7)", animation: "sv-pulse 3s ease-in-out infinite",
               }}>
@@ -288,9 +288,14 @@ export default function HomePage() {
           .sv-text { position: static !important; width: auto !important; padding: 9% 8% 0 !important; }
           .sv-cols { column-count: 1 !important; }
           .sv-door {
-            position: static !important; width: auto !important; max-width: none !important;
-            height: 30vh !important; margin: 7% 8% 0 !important;
+            /* relative (not static) so the passage's inset:0 panels stay anchored
+               to the door instead of escaping to the wall container and ballooning. */
+            position: relative !important; width: auto !important; max-width: none !important;
+            height: 24vh !important; margin: 5% 8% 0 !important; right: auto !important;
           }
+          /* The mobile passage is short, so centre the Enter cue instead of sinking
+             it to the far opening (which would fall behind the floor / off-screen). */
+          .sv-enter-hint { bottom: 56% !important; transform: translateY(50%); }
           /* Door reflows to a centred block on mobile — push straight in, no sideways slide. */
           .sv-room { transform-origin: 50% 78%; }
           .sv-room.sv-entering { transform: translate(0, -6vh) scale(2); }
