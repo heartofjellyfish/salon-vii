@@ -54,16 +54,18 @@ const DOME_FRAG = /* glsl */ `
     vec2 gi = floor(sg);
     float h = hash(gi);
     float star = 0.0;
-    if (h > 0.85) {
+    if (h > 0.82) {
       vec2 cc = gi + 0.5 + 0.35 * vec2(hash(gi + 1.3) - 0.5, hash(gi + 2.7) - 0.5);
       float d = length(sg - cc);
-      float tw = 0.55 + 0.45 * sin(uTime * 2.2 + h * 60.0);
-      float br = (h - 0.85) / 0.15;
+      float tw = 0.62 + 0.38 * sin(uTime * 2.2 + h * 60.0);
+      float br = (h - 0.82) / 0.18;
       star = smoothstep(0.16, 0.0, d) * tw * br;
     }
-    float cloudLum = max(col.r, max(col.g, col.b));
-    float starVis = smoothstep(0.46, 0.12, cloudLum) * smoothstep(1.05, 0.4, rn);
-    col += vec3(1.0, 0.94, 0.76) * star * starVis * 1.3;
+    // Hide stars only behind the golden clouds (high red), not the blue sky, and
+    // keep them across the dome — fading only in the last sliver near the frame.
+    float cloudAmt = smoothstep(0.30, 0.62, col.r);
+    float starVis = (1.0 - 0.9 * cloudAmt) * smoothstep(1.02, 0.82, rn);
+    col += vec3(1.0, 0.94, 0.76) * star * starVis * 1.6;
 
     gl_FragColor = vec4(col, 1.0);
   }
