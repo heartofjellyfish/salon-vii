@@ -188,42 +188,101 @@ function DebugHUD({
   );
 }
 
-// Context control hints — an intuitive key→action strip that flashes whenever the
-// keys change meaning (roam → inspect entry → cropped surface). Dark glyph pills
-// (legible on anything) + a short gold label.
+// One consolidated control cluster (bottom-centre): the current key→action hints
+// plus the interactive zoom buttons. It flashes when the keys change meaning,
+// then recedes to a small handle; hovering the handle (or cluster) brings it back.
 const CONTROL_HINTS: Record<"roam" | "entry" | "cropped", { keys: string[]; label: string }[]> = {
   roam: [{ keys: ["←", "→"], label: "切换画作" }, { keys: ["↑"], label: "走近" }, { keys: ["↓"], label: "退后" }],
-  entry: [{ keys: ["↑"], label: "贴近端详" }, { keys: ["↓"], label: "退出" }, { keys: ["+", "−"], label: "缩放" }],
-  cropped: [{ keys: ["↑", "↓", "←", "→"], label: "移动" }, { keys: ["+", "−"], label: "缩放" }, { keys: ["Esc"], label: "退出" }],
+  entry: [{ keys: ["↑"], label: "贴近端详" }, { keys: ["↓"], label: "退出" }],
+  cropped: [{ keys: ["↑", "↓", "←", "→"], label: "移动" }, { keys: ["Esc"], label: "退出" }],
 };
 
-function ControlHints({ phase, show }: { phase: "roam" | "entry" | "cropped"; show: boolean }) {
+const HINT_PILL: React.CSSProperties = {
+  minWidth: 24, height: 24, padding: "0 5px", borderRadius: 6,
+  display: "flex", alignItems: "center", justifyContent: "center",
+  border: "1px solid rgba(201,168,76,0.45)", background: "rgba(5,3,8,0.6)",
+  backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+  color: "#c9a84c", fontSize: 13, lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
+};
+const HINT_LABEL: React.CSSProperties = {
+  fontFamily: "'Cormorant Garamond', serif", fontSize: 13.5, fontStyle: "italic",
+  letterSpacing: "0.03em", color: "rgba(201,168,76,0.92)", whiteSpace: "nowrap",
+  textShadow: "0 1px 3px rgba(0,0,0,0.92), 0 0 10px rgba(0,0,0,0.6)",
+};
+const ZOOM_BTN: React.CSSProperties = {
+  width: 30, height: 30, borderRadius: "50%", border: "1px solid rgba(201,168,76,0.5)",
+  background: "rgba(5,3,8,0.6)", color: "#c9a84c", cursor: "pointer", fontSize: "1.1rem",
+  display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
+  backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", touchAction: "none",
+  boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
+};
+
+function ControlBar({
+  phase,
+  show,
+  inspecting,
+  api,
+  onHover,
+}: {
+  phase: "roam" | "entry" | "cropped";
+  show: boolean;
+  inspecting: boolean;
+  api: React.MutableRefObject<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void } | null>;
+  onHover: (h: boolean) => void;
+}) {
   return (
-    <div style={{
-      position: "fixed", bottom: 30, left: "50%", transform: "translateX(-50%)", zIndex: 200,
-      display: "flex", alignItems: "center", gap: 18, pointerEvents: "none",
-      opacity: show ? 1 : 0, transition: "opacity 0.7s ease",
-    }}>
-      {CONTROL_HINTS[phase].map((item, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <div style={{ display: "flex", gap: 4 }}>
-            {item.keys.map((k) => (
-              <div key={k} style={{
-                minWidth: 24, height: 24, padding: "0 5px", borderRadius: 6,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                border: "1px solid rgba(201,168,76,0.45)", background: "rgba(5,3,8,0.6)",
-                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                color: "#c9a84c", fontSize: 13, lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
-              }}>{k}</div>
-            ))}
-          </div>
-          <span style={{
-            fontFamily: "'Cormorant Garamond', serif", fontSize: 13.5, fontStyle: "italic",
-            letterSpacing: "0.03em", color: "rgba(201,168,76,0.92)", whiteSpace: "nowrap",
-            textShadow: "0 1px 3px rgba(0,0,0,0.92), 0 0 10px rgba(0,0,0,0.6)",
-          }}>{item.label}</span>
+    <div style={{ position: "fixed", bottom: 24, left: 0, right: 0, zIndex: 210, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
+      {/* Stable hover zone — sized to the cluster (always in layout), so hovering
+          anywhere over it reliably reveals the controls and leaving hides them. */}
+      <div
+        onMouseEnter={() => onHover(true)}
+        onMouseLeave={() => onHover(false)}
+        style={{ position: "relative", display: "flex", justifyContent: "center", padding: "8px 0", pointerEvents: "auto" }}
+      >
+        {/* full cluster — visible while flashing or hovered */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 16,
+          opacity: show ? 1 : 0, transition: "opacity 0.4s ease",
+          pointerEvents: show ? "auto" : "none",
+        }}>
+          {CONTROL_HINTS[phase].map((item, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                {item.keys.map((k) => <span key={k} style={HINT_PILL}>{k}</span>)}
+              </div>
+              <span style={HINT_LABEL}>{item.label}</span>
+            </div>
+          ))}
+          {inspecting && (
+            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+              <div style={{ display: "flex", gap: 4 }}>
+                {([["−", -1], ["+", 1]] as const).map(([label, dir]) => (
+                  <button
+                    key={label}
+                    onPointerDown={(e) => { e.preventDefault(); api.current?.setZoomDir(dir); }}
+                    onPointerUp={() => api.current?.setZoomDir(0)}
+                    onPointerLeave={() => api.current?.setZoomDir(0)}
+                    onPointerCancel={() => api.current?.setZoomDir(0)}
+                    aria-label={dir === 1 ? "zoom in" : "zoom out"}
+                    style={ZOOM_BTN}
+                  >{label}</button>
+                ))}
+              </div>
+              <span style={HINT_LABEL}>缩放</span>
+            </div>
+          )}
         </div>
-      ))}
+        {/* collapsed handle — a faint cue showing where to hover once it recedes */}
+        <div style={{
+          position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+          opacity: show ? 0 : 0.5, transition: "opacity 0.4s ease", pointerEvents: "none",
+          padding: "3px 16px", borderRadius: 10,
+          border: "1px solid rgba(201,168,76,0.3)", background: "rgba(5,3,8,0.5)",
+          backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+          color: "rgba(201,168,76,0.85)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.05em",
+          textShadow: "0 1px 3px rgba(0,0,0,0.9)", whiteSpace: "nowrap",
+        }}>⌃ 操作</div>
+      </div>
     </div>
   );
 }
@@ -244,7 +303,7 @@ export default function GalleryPage() {
   const [inspecting, setInspecting] = useState(false);
   const [inspectedIndex, setInspectedIndex] = useState<number | null>(null);
   const [inspectCue, setInspectCue] = useState(false); // brief "look closely" prompt on entry
-  const [zoomHover, setZoomHover] = useState(false);
+  const [hovered, setHovered] = useState(false); // control bar hovered → keep it shown
   const inspectApi = useRef<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void } | null>(null);
   const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number; loadedW?: number; loadedH?: number } }>({});
   const viewRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
@@ -527,8 +586,17 @@ export default function GalleryPage() {
         </div>
       )}
 
-      {/* Context control hint — flashes the current keys whenever they change */}
-      {mode === "unguided" && <ControlHints phase={controlPhase} show={hintsOn} />}
+      {/* Consolidated control cluster — key hints + zoom buttons; flashes on a
+          control change, then recedes to a handle that reveals it on hover */}
+      {mode === "unguided" && (
+        <ControlBar
+          phase={controlPhase}
+          show={hintsOn || hovered}
+          inspecting={inspecting}
+          api={inspectApi}
+          onHover={setHovered}
+        />
+      )}
 
       {/* Inspect mode — vignette to focus the eye on the canvas */}
       {mode === "unguided" && (
@@ -556,37 +624,6 @@ export default function GalleryPage() {
         </div>
       )}
 
-      {/* Inspect mode — zoom buttons (revealed on entry, then only on hover) */}
-      {mode === "unguided" && inspecting && (
-        <div
-          onMouseEnter={() => setZoomHover(true)}
-          onMouseLeave={() => setZoomHover(false)}
-          style={{
-            position: "fixed", right: 0, top: "50%", transform: "translateY(-50%)", zIndex: 210,
-            display: "flex", flexDirection: "column", gap: 10, padding: "28px 18px 28px 44px",
-            opacity: inspectCue || zoomHover ? 1 : 0, transition: "opacity 0.6s ease",
-          }}
-        >
-          {([["+", 1], ["−", -1]] as const).map(([label, dir]) => (
-            <button
-              key={label}
-              onPointerDown={(e) => { e.preventDefault(); inspectApi.current?.setZoomDir(dir); }}
-              onPointerUp={() => inspectApi.current?.setZoomDir(0)}
-              onPointerLeave={() => inspectApi.current?.setZoomDir(0)}
-              onPointerCancel={() => inspectApi.current?.setZoomDir(0)}
-              aria-label={dir === 1 ? "zoom in" : "zoom out"}
-              style={{
-                width: 42, height: 42, borderRadius: "50%", border: "1px solid rgba(201,168,76,0.4)",
-                background: "rgba(5,3,8,0.6)", color: "#c9a84c", cursor: "pointer", fontSize: "1.4rem",
-                display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
-                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", touchAction: "none",
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* Inspect mode — "you are here" minimap */}
       {mode === "unguided" && inspecting && inspectedIndex != null && artworks[inspectedIndex]?.imageUrl && (
