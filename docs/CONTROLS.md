@@ -4,8 +4,10 @@ The current interaction model for the 3D gallery (`/gallery`), written as the
 starting point for a dedicated **controls** session covering mouse, keyboard, and
 mobile (iPad / iPhone).
 
-_As of 2026-05-27 (main @ `0f9707f`). Desktop **mouse + keyboard are implemented**;
-**touch / mobile is essentially not yet handled** — see [Touch / mobile](#touch--mobile-not-implemented--this-sessions-focus)._
+_As of 2026-05-27 (main @ `36abae3`). **Mouse, keyboard, and touch are all
+implemented**: desktop drives it with keyboard + mouse (drag / click + the bottom
+buttons); touch (iPhone / iPad) uses direct-manipulation gestures (drag / pinch /
+tap / swipe). Each is detailed below._
 
 ---
 
@@ -38,10 +40,11 @@ same for any size/aspect. `FIT_MARGIN = 1.18`; "frame just cropped" ≈ ratio
 | roam | `←` / `→` | move to the previous / next painting (walk around the walls) |
 | roam | `↑` | step closer (dolly through room stops); at the closest stop, **cross into inspect** |
 | roam | `↓` | step back (dolly out through room stops) |
+| roam | `Esc` | **return to the entry view** — the start anchor at room-overview distance |
 | entry | `↑` | lean onto the painting **surface** (zoom in until the frame is cropped) |
 | entry | `↓` | **exit** inspect, back to the room (frame + nameplate) |
 | entry / cropped | `+` / `−` | zoom in / out (see zoom behaviour below) |
-| entry / cropped | `Esc` | exit inspect |
+| entry / cropped | `Esc` | exit inspect (back to the room) |
 | cropped | `↑` `↓` `←` `→` | **pan** the magnifier across the surface |
 
 Key nuances (all in `AnchorControls`):
@@ -65,7 +68,7 @@ Key nuances (all in `AnchorControls`):
 | where | action |
 |---|---|
 | room (roam) | **drag** left/right to move between paintings (pointer drag; disabled while inspecting) |
-| any painting | **click** → opens a full-screen 2D **lightbox** of that work |
+| any painting | **click** → opens a full-screen 2D **lightbox** (desktop / guided; on **touch** a tap *looks closely* instead — see Touch) |
 | lightbox | click the backdrop or the **×** to close |
 | control panel (bottom) | **hold** `−` / `+` to zoom (tap = notch); click **▦** to toggle the thumbnail, **♪** to toggle ambient music |
 | bottom-right | **mode toggle** button (Free ↔ Guided) |
@@ -81,7 +84,8 @@ artwork while viewing.
 - **Reveal** when any of: the cursor comes near the bottom edge
   (`clientY > innerHeight − 120`), a brief flash on entering Free mode, or a flash
   whenever the **phase changes** (the keys change meaning). It recedes after the
-  ~4.2 s flash or when the cursor leaves the bottom.
+  ~4.2 s flash or when the cursor leaves the bottom. **(Desktop only — on touch the
+  bar stays up so the buttons are always reachable; see Touch.)**
 - **Fixed button positions** — the buttons are a constant row (zoom `−`, zoom `+`,
   thumbnail `▦`, music `♪`/`♫`) that occupies the **same slots in every phase**, so muscle memory
   holds (zoom never jumps). Controls that don't apply in the current phase **dim in
@@ -97,50 +101,62 @@ artwork while viewing.
 
 ---
 
-## Touch / mobile (NOT implemented — this session's focus)
+## Touch / mobile (iPhone / iPad)
 
-There is **no touch-specific UX** today (only `touchAction: "none"` on the zoom
-buttons). The drag and the panel buttons use pointer events, which *do* fire on
-touch, but the model is built for mouse + keyboard. Gaps to design:
+Detected by a **coarse pointer** (`isTouch`; force with `?touch`). The model mirrors
+desktop — room → look closely → pan/zoom → exit — expressed with native gestures:
 
-- **Panel reveal**: "cursor near the bottom" can't work on touch (no hover /
-  mousemove). Needs a tap target, an always-visible handle, or a swipe-up.
-- **Zoom**: no **pinch-to-zoom** (the natural touch gesture). Today only the `−/+`
-  buttons (tap = notch, press-hold = continuous) and the keyboard work.
-- **Pan**: no one/two-finger drag-to-pan on the surface; only arrow keys.
-- **Navigate paintings**: roam drag works via pointer, but **swipe left/right** for
-  prev/next would be expected.
-- **Enter / exit inspect**: no **double-tap to zoom in**, no pinch-out to enter.
-- **iPad vs iPhone**: larger vs small screen; consider Pencil; the hi-res cap and
-  deepest-zoom clamp already adapt per device (see below).
-- Coordinate with any existing touch work / `?touch` test override in another
-  session before building.
+| where | gesture | action |
+|---|---|---|
+| room | one-finger horizontal drag | walk between paintings |
+| room | **tap a painting** | walk to it and look closely (no flat lightbox on touch) |
+| inspect | one-finger drag | pan the magnifier across the surface |
+| inspect | **two-finger pinch** | zoom in / out (clamped to the 1:1 crisp limit) |
+| inspect | **swipe down** or a hard pinch-in | exit back to the room |
+| controls | `−` `+` `▦` `♪` `×` buttons | zoom, thumbnail, music, exit — larger tap targets |
 
-Already device-adaptive (don't re-do): hi-res texture width is capped per device
-(`pickHiResWidth` in `Painting.tsx` — phone → 2048, etc.), and the **deepest zoom is
-clamped to the painting's 1:1 limit** for the current screen, so touch devices
-automatically zoom only as far as stays crisp.
+- Inspect pan/pinch are gated to **touch + pen**, so a desktop mouse is unaffected.
+- The control bar **stays up** on touch (no hover to summon it back), sat a row
+  higher so its right button clears the mode toggle, with **gesture-text hints** per
+  phase (`TOUCH_HINTS`) instead of key pills. The hint line still only flashes so it
+  isn't over the work while you examine it.
+- A `viewport` meta blocks browser page-zoom over the canvas (`viewport-fit:cover`);
+  the persistent controls respect `env(safe-area-inset-*)`.
+- Device-adaptive: the hi-res cap (`pickHiResWidth`, phone → 2048) and the
+  deepest-zoom 1:1 clamp mean a phone pinch only zooms as far as stays crisp.
+
+### Touch ideas not yet done (open for the controls session)
+- **Double-tap** to zoom in one step (Photos/Maps convention).
+- **Swipe left/right** to jump straight to the adjacent painting (today it's a
+  one-finger drag-walk).
+- Momentum / rubber-band polish on the pinch and swipe.
+- iPad-specific affordances (more screen, Pencil) vs the small iPhone layout.
 
 ---
 
 ## Implementation map (where to edit)
 
 - **`src/components/gallery/GalleryScene.tsx` → `AnchorControls`** — the camera
-  controller. Keyboard handler (`onKey` / `onKeyUp` / `onBlur`), pointer-drag
-  handler, and the `useFrame` that integrates dolly / pan / continuous zoom and
-  reports the **phase** via `onPhaseChange`. Exposes `inspectApi = { setZoomDir,
-  exit }`. Tunables (module consts): `VIEW_DIST`, `ROOM_OUT`, `FIT_MARGIN`,
+  controller. Keyboard handler (`onKey` / `onKeyUp` / `onBlur`), the pointer/touch
+  **gesture** handler (one-finger drag-walk / pan, two-finger pinch, swipe-down or
+  pinch-in to exit — a `gesture` state machine), and the `useFrame` that integrates
+  dolly / pan / continuous zoom and reports the **phase** via `onPhaseChange`.
+  Exposes `inspectApi = { setZoomDir, exit, inspectIndex }`. Tunables (module consts): `VIEW_DIST`, `ROOM_OUT`, `FIT_MARGIN`,
   `DEEPEST_RATIO`, `ZOOM_RATE`, `TAP_MS`, `NOTCH`, `SURFACE_RATIO`. Refs that hold
   the interaction state: `inspectRatio`, `zoomDir`, `pressDir`, `swallowUp`,
   `minRatio`, `roomIdx`, `heldKeys`.
 - **`src/app/gallery/page.tsx`** — all the DOM UI and state: `ControlBar` +
-  `CONTROL_HINTS`, the `controlPhase` / `hintsOn` / `nearBottom` / `showMinimap`
-  state and the mousemove + flash `useEffect`s, `InspectMinimap`, the lightbox,
-  the mode toggle, and the guided-mode prev/next/dots. The `?debug` HUD lives here
-  too (`DebugHUD`, shown with `?debug=1`).
+  `CONTROL_HINTS` (desktop key pills) + `TOUCH_HINTS` (gesture text), the
+  `controlPhase` / `hintsOn` / `nearBottom` / `showMinimap` / `isTouch` / `musicOn`
+  state and the mousemove + flash `useEffect`s, the music toggle
+  (`handleToggleMusic`, `fadeAudio`), `InspectMinimap`, the lightbox, the mode
+  toggle, the guided-mode prev/next/dots, and the `?debug` HUD (`DebugHUD`,
+  `?debug=1`).
 - **`src/components/gallery/Painting.tsx`** — `pickHiResWidth` (device-adaptive
   texture width) and the per-painting `texWidth` reported into `paintingDimsRef`,
   which feeds the 1:1 zoom clamp.
+- **`src/lib/music.ts`** — the ambient-audio singleton (lazy `getMusic()`, looping)
+  and the "armed on entry" flag the `♪` toggle and the entrance use.
 
 ---
 
