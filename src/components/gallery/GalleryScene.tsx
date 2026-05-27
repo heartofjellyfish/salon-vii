@@ -31,6 +31,8 @@ export interface PaintingDims {
   ph: number; // canvas height (m)
   frameWidth: number; // how far the frame extends beyond the canvas, per side (m)
   texWidth?: number; // px width of the texture resident during inspect (base or hi-res)
+  loadedW?: number; // actual px dims of the currently-resident texture (debug HUD)
+  loadedH?: number;
 }
 
 interface GallerySceneProps {
@@ -78,8 +80,10 @@ const MIN_ROOM_RATIO = 1.12;
 // Inspect zoom stops as multiples of the bare-frame fit (entry → deepest). Step 0
 // (=1.0) is "just fits" — the whole frame fills the screen. The first press jumps
 // hard to 0.6 (≈1.67×) so the frame leaves the screen and you land on the painting
-// surface; later steps are finer for precise detail framing.
-const INSPECT_STEPS = [1.0, 0.6, 0.4, 0.28];
+// surface; later steps are finer. The list runs deep (to 0.1) to exploit big
+// masters, but each painting only reaches the steps that stay crisp — the
+// per-painting 1:1 clamp (minRatio) stops a low-res work before it would blur.
+const INSPECT_STEPS = [1.0, 0.6, 0.4, 0.28, 0.2, 0.14, 0.1];
 
 // Held-arrow pan speed in screen-heights per second, so roaming feels the same
 // at every zoom. Eased for a soft start/stop.

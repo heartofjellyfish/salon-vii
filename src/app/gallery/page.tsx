@@ -144,6 +144,50 @@ function InspectMinimap({
   );
 }
 
+// ?debug readout — confirms the inspected painting's resident texture resolution
+// (loaded vs the requested target vs the source master), polled per frame off the
+// shared dims ref so it tracks the hi-res swap live.
+function DebugHUD({
+  index,
+  artwork,
+  dimsRef,
+}: {
+  index: number;
+  artwork: Artwork;
+  dimsRef: React.MutableRefObject<{ [index: number]: { texWidth?: number; loadedW?: number; loadedH?: number } }>;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const master = useMemo(() => {
+    const m = (artwork?.image?.asset?._ref || "").match(/-(\d+)x(\d+)-/);
+    return m ? `${m[1]}×${m[2]}` : "—";
+  }, [artwork]);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const d = dimsRef.current[index];
+      if (ref.current) {
+        const loaded = d?.loadedW ? `${d.loadedW}×${d.loadedH ?? "?"}` : "…";
+        ref.current.textContent = `${artwork?.title ?? ""} · loaded ${loaded} · target ${d?.texWidth ?? "?"}px · master ${master}`;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [index, artwork, master, dimsRef]);
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: "fixed", top: 12, left: 12, zIndex: 300, pointerEvents: "none",
+        font: "11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace",
+        color: "#c9e8a8", background: "rgba(5,3,8,0.72)", padding: "5px 9px", borderRadius: 5,
+        border: "1px solid rgba(201,168,76,0.3)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
+        letterSpacing: "0.02em", whiteSpace: "nowrap",
+      }}
+    />
+  );
+}
+
 export default function GalleryPage() {
   const [mode, setMode] = useState<"guided" | "unguided">("unguided");
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -163,8 +207,11 @@ export default function GalleryPage() {
   const [inspectCue, setInspectCue] = useState(false); // brief "look closely" prompt on entry
   const [zoomHover, setZoomHover] = useState(false);
   const inspectApi = useRef<{ zoom: (dir: 1 | -1) => void; exit: () => void } | null>(null);
-  const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number } }>({});
+  const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number; loadedW?: number; loadedH?: number } }>({});
   const viewRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
+  // ?debug — show a small resolution readout for the inspected painting (hidden
+  // for normal visitors).
+  const debug = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug"), []);
 
   // Inspect-mode vignette — ellipse on a landscape screen, circle on portrait
   // (so a landscape canvas keeps its sides clear instead of being pinched).
@@ -538,6 +585,11 @@ export default function GalleryPage() {
           dims={paintingDimsRef.current[inspectedIndex] ?? { pw: 1, ph: 1, frameWidth: 0.09 }}
           viewRef={viewRef}
         />
+      )}
+
+      {/* ?debug — resident texture resolution readout for the inspected work */}
+      {debug && mode === "unguided" && inspecting && inspectedIndex != null && artworks[inspectedIndex] && (
+        <DebugHUD index={inspectedIndex} artwork={artworks[inspectedIndex]} dimsRef={paintingDimsRef} />
       )}
 
       {/* Mode Toggle */}

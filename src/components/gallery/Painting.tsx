@@ -15,7 +15,7 @@ interface PaintingProps {
   artwork: Artwork;
   index: number;
   saturationRefs: React.MutableRefObject<{ [key: number]: { value: number } }>;
-  paintingDimsRef: React.MutableRefObject<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number } }>;
+  paintingDimsRef: React.MutableRefObject<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number; loadedW?: number; loadedH?: number } }>;
   mode: "guided" | "unguided";
   // True for the one painting being inspected — loads an adaptive high-res
   // master and cross-fades it in; released when inspection ends.
@@ -203,7 +203,11 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
 
   // Report real dimensions so inspect mode can frame the whole work (canvas +
   // frame) and clamp panning to the canvas edges.
-  paintingDimsRef.current[index] = { pw, ph, frameWidth: getFrameWidth(artwork.frameStyle), texWidth: inspectTexWidth };
+  const residentImg = (hiResTexture ?? baseTexture).image as { width?: number; height?: number } | undefined;
+  paintingDimsRef.current[index] = {
+    pw, ph, frameWidth: getFrameWidth(artwork.frameStyle), texWidth: inspectTexWidth,
+    loadedW: residentImg?.width, loadedH: residentImg?.height,
+  };
 
   const handleClick = (e: any) => {
     e.stopPropagation();
