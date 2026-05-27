@@ -86,6 +86,11 @@ const DEEPEST_RATIO = 0.1;
 // Continuous-zoom speed: the ratio e-folds per second while +/- is held, so a full
 // hold runs ≈1.4s from the whole frame to the deepest crisp point.
 const ZOOM_RATE = 1.6;
+// Tap vs hold: a press starts gliding immediately, but if it's released within
+// TAP_MS we treat it as a deliberate tap and snap to a single clean notch
+// (×/÷ NOTCH from where the press began). So a tap steps, a hold rides.
+const TAP_MS = 200;
+const NOTCH = 1.8;
 
 // Held-arrow pan speed in screen-heights per second, so roaming feels the same
 // at every zoom. Eased for a soft start/stop.
@@ -223,6 +228,12 @@ function AnchorControls({
   // fills), glided while +/- is held; zoomDir is -1 (out) / 0 / +1 (in).
   const inspectRatio = useRef(1);
   const zoomDir = useRef<-1 | 0 | 1>(0);
+  // Tap-vs-hold bookkeeping: a press glides immediately; a release within TAP_MS
+  // snaps to one clean notch from where the press began.
+  const pressDir = useRef<-1 | 0 | 1>(0);
+  const pressStart = useRef(0);
+  const ratioAtPress = useRef(1);
+  const justEntered = useRef(false);
   // Deepest zoom ratio the current painting can show without magnifying its
   // resident texture past ~1:1 (recomputed per frame from texWidth + viewport).
   const minRatio = useRef(1);
@@ -297,13 +308,40 @@ function AnchorControls({
     onInspectingChange?.(false);
   };
 
-  // Begin/stop a continuous zoom. dir = +1 in, -1 out, 0 stop. From the room (at
-  // the closest stop) a zoom-in first crosses into inspect, then keeps gliding
-  // while held; the per-frame integrator stops it at the crisp limit / exits on
-  // the way back out.
+  // Press/hold zoom. dir = +1 in, -1 out, 0 = release. A press starts a continuous
+  // glide right away; releasing within TAP_MS turns it into a single clean notch
+  // (so a quick tap is a deliberate step, a hold is a smooth ride). From the room
+  // (at the closest stop) a zoom-in press first crosses into inspect.
   const setZoomDir = (dir: -1 | 0 | 1) => {
-    if (dir === 1 && !inspecting.current && roomIdx.current === ROOM_CLOSEST_INDEX) enterInspect();
-    zoomDir.current = inspecting.current ? dir : 0;
+    if (dir === 0) {
+      const was = pressDir.current;
+      pressDir.current = 0;
+      zoomDir.current = 0;
+      if (was === 0) return;
+      const tapped = performance.now() - pressStart.current < TAP_MS;
+      if (tapped && !justEntered.current) {
+        if (was === -1 && ratioAtPress.current >= 1 - 1e-3) {
+          exitInspect(); // a tap "out" at the whole-frame view leaves inspect
+        } else {
+          const target = ratioAtPress.current * (was === 1 ? 1 / NOTCH : NOTCH);
+          inspectRatio.current = target >= 1 ? 1 : THREE.MathUtils.clamp(target, minRatio.current, 1);
+        }
+      }
+      justEntered.current = false;
+      return;
+    }
+    // begin a press
+    justEntered.current = false;
+    if (dir === 1 && !inspecting.current && roomIdx.current === ROOM_CLOSEST_INDEX) {
+      enterInspect();
+      justEntered.current = true; // this press only opens inspect — don't also notch
+    }
+    if (!inspecting.current) return;
+    if (pressDir.current === dir) return; // ignore auto-repeat keydowns
+    pressDir.current = dir;
+    pressStart.current = performance.now();
+    ratioAtPress.current = inspectRatio.current;
+    zoomDir.current = dir; // glide immediately; a fast release snaps to a notch
   };
 
   // Expose zoom/exit so the DOM zoom buttons can drive the 3D camera.
@@ -414,12 +452,13 @@ function AnchorControls({
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_") zoomDir.current = 0;
+      if (e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_") setZoomDir(0);
       heldKeys.current.delete(e.key);
     };
     const onBlur = () => {
       heldKeys.current.clear();
       zoomDir.current = 0;
+      pressDir.current = 0;
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKeyUp);
