@@ -163,7 +163,7 @@ export default function GalleryPage() {
   const [inspectCue, setInspectCue] = useState(false); // brief "look closely" prompt on entry
   const [zoomHover, setZoomHover] = useState(false);
   const inspectApi = useRef<{ zoom: (dir: 1 | -1) => void; exit: () => void } | null>(null);
-  const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number } }>({});
+  const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number } }>({});
   const viewRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
 
   // Inspect-mode vignette — ellipse on a landscape screen, circle on portrait

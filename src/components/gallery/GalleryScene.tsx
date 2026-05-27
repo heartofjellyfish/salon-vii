@@ -30,6 +30,7 @@ export interface PaintingDims {
   pw: number; // canvas width (m)
   ph: number; // canvas height (m)
   frameWidth: number; // how far the frame extends beyond the canvas, per side (m)
+  texWidth?: number; // px width of the texture resident during inspect (base or hi-res)
 }
 
 interface GallerySceneProps {
@@ -213,6 +214,9 @@ function AnchorControls({
   const inspecting = useRef(false);
   const roomIdx = useRef(DEFAULT_ROOM_INDEX); // index into ROOM_OUT
   const inspectStep = useRef(0); // index into INSPECT_STEPS
+  // Deepest zoom ratio the current painting can show without magnifying its
+  // resident texture past ~1:1 (recomputed per frame from texWidth + viewport).
+  const minRatio = useRef(1);
   // Once ↑ glides us to fit and enters inspect, swallow the still-held ↑ so it
   // genuinely STOPS at fit; the visitor must release and press again to go deeper.
   const swallowUp = useRef(false);
@@ -248,7 +252,7 @@ function AnchorControls({
   };
   const currentArtworkIndex = () => anchors[nearestAnchorIndex()]?.artworkIndex ?? 0;
   const currentDims = (): PaintingDims =>
-    paintingDimsRef.current[currentArtworkIndex()] ?? { pw: 1, ph: 1, frameWidth: 0.09 };
+    paintingDimsRef.current[currentArtworkIndex()] ?? { pw: 1, ph: 1, frameWidth: 0.09, texWidth: 2048 };
 
   // Distance at which a box of half-extents (halfW, halfH) just fills the screen.
   const fitFor = (halfW: number, halfH: number, aspect: number) =>
@@ -297,6 +301,9 @@ function AnchorControls({
       exitInspect(); // zooming back out past the whole work leaves inspect
       return;
     }
+    // Don't step deeper than the resident texture stays crisp: the ratio is
+    // clamped to minRatio anyway, so a deeper press would just be a dead no-op.
+    if (dir === 1 && INSPECT_STEPS[inspectStep.current] <= minRatio.current) return;
     inspectStep.current = Math.min(next, INSPECT_STEPS.length - 1);
   };
 
@@ -451,10 +458,24 @@ function AnchorControls({
     }
     const aspect = sizeRef.current.width / Math.max(1, sizeRef.current.height);
     const dims = currentDims();
-    // Dolly target: bare-frame fit (inspect — frame fills) or the room base that
-    // frames frame + nameplate (room). Eased to the actual distance.
+    const fit = framedFit(dims, aspect);
+    // Deepest crisp zoom for THIS painting: the ratio at which the resident
+    // texture maps ~1:1 to device pixels. Going deeper would only upscale (soft),
+    // so clamp the deepest stop there — high-res masters / larger screens earn a
+    // deeper stop, small masters and phones stop shallower. hHalf at fit is the
+    // half view-width (m) when the bare frame fills the screen.
+    const hHalfAtFit = fit * TAN_HALF_V * aspect;
+    const fbW = gl.domElement.width || sizeRef.current.width;
+    const texW = dims.texWidth ?? 2048;
+    minRatio.current = THREE.MathUtils.clamp(
+      (dims.pw * fbW) / (2 * texW * hHalfAtFit),
+      INSPECT_STEPS[INSPECT_STEPS.length - 1],
+      1
+    );
+    // Dolly target: bare-frame fit (inspect — frame fills, clamped to the crisp
+    // limit) or the room base that frames frame + nameplate (room).
     const targetDepth = inspecting.current
-      ? framedFit(dims, aspect) * INSPECT_STEPS[inspectStep.current]
+      ? fit * Math.max(INSPECT_STEPS[inspectStep.current], minRatio.current)
       : roomBaseDepth(dims, aspect) * ROOM_OUT[roomIdx.current];
     // Opening dolly-in: hold far behind the black curtain, then drift in slowly
     // (eyes-opening) to the room overview before normal responsive dollying.

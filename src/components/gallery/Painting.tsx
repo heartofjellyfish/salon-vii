@@ -15,7 +15,7 @@ interface PaintingProps {
   artwork: Artwork;
   index: number;
   saturationRefs: React.MutableRefObject<{ [key: number]: { value: number } }>;
-  paintingDimsRef: React.MutableRefObject<{ [index: number]: { pw: number; ph: number; frameWidth: number } }>;
+  paintingDimsRef: React.MutableRefObject<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number } }>;
   mode: "guided" | "unguided";
   // True for the one painting being inspected — loads an adaptive high-res
   // master and cross-fades it in; released when inspection ends.
@@ -33,14 +33,17 @@ function masterWidthOf(artwork: Artwork): number | null {
 }
 
 // The high-res width to request for the canvas you're inspecting, adapted to the
-// device so phones and slow links never pull (or try to hold) a 4K texture:
-//   • 4096 ("4K") ceiling on the long edge for desktops,
+// device so phones and slow links never pull (or try to hold) a huge texture:
+//   • up to 8192 ("8K") on the long edge for desktops, so deep zoom stays crisp
+//     even on hi-DPI screens (the inspect camera caps zoom at this texture's 1:1),
 //   • stepped down by screen size × DPR, device memory and network,
-//   • clamped to the GPU's max texture size and the master's own width.
+//   • clamped to the GPU's max texture size AND the master's own pixel width —
+//     Sanity never upscales, so each painting only ever loads what it actually
+//     has (which is also what makes deep-master works zoom deeper than small ones).
 // Only the inspected painting loads this and it's freed on exit, so a single
 // large texture is resident at a time.
 function pickHiResWidth(gl: THREE.WebGLRenderer, artwork: Artwork): number {
-  let cap = 4096;
+  let cap = 8192;
   if (typeof window !== "undefined") {
     const dpr = Math.min(window.devicePixelRatio || 1, 2); // canvas renders at ≤2× anyway
     const longEdge = Math.max(window.screen?.width || 0, window.screen?.height || 0) * dpr;
@@ -116,6 +119,10 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
   const facing = getFacingDir(artwork.position?.wall || "north");
   const groupRef = useRef<THREE.Group>(null!);
   const gl = useThree((s) => s.gl);
+  // Device-adaptive width we'd load on inspect (≤ base ⇒ stay on base). Reported
+  // into paintingDimsRef so the camera can cap zoom at this texture's 1:1 point.
+  const hiResWidth = useMemo(() => pickHiResWidth(gl, artwork), [gl, artwork]);
+  const inspectTexWidth = Math.max(2048, hiResWidth);
 
   // Wall texture: the standard-resolution image. The exhibition API pre-builds a
   // 2048px URL; this fallback matches it for the rare path where it isn't set.
@@ -143,11 +150,10 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
   const [hiResTexture, setHiResTexture] = useState<THREE.Texture | null>(null);
   useEffect(() => {
     if (!hiRes || !artwork.image?.asset) return;
-    const w = pickHiResWidth(gl, artwork);
-    if (w <= 2048) return; // base already covers this screen / master
+    if (hiResWidth <= 2048) return; // base already covers this screen / master
     let cancelled = false;
     const hiUrl = `/api/img?u=${encodeURIComponent(
-      urlFor(artwork.image).width(w).quality(90).auto("format").url()
+      urlFor(artwork.image).width(hiResWidth).quality(90).auto("format").url()
     )}`;
     new THREE.TextureLoader().load(hiUrl, (tex) => {
       if (cancelled) {
@@ -162,7 +168,7 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
     return () => {
       cancelled = true;
     };
-  }, [hiRes, artwork, gl, baseTexture]);
+  }, [hiRes, artwork, hiResWidth, baseTexture]);
 
   // On inspect exit, drop the reference (the material's hiMap falls back to base)…
   useEffect(() => {
@@ -197,7 +203,7 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
 
   // Report real dimensions so inspect mode can frame the whole work (canvas +
   // frame) and clamp panning to the canvas edges.
-  paintingDimsRef.current[index] = { pw, ph, frameWidth: getFrameWidth(artwork.frameStyle) };
+  paintingDimsRef.current[index] = { pw, ph, frameWidth: getFrameWidth(artwork.frameStyle), texWidth: inspectTexWidth };
 
   const handleClick = (e: any) => {
     e.stopPropagation();
