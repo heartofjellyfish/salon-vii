@@ -9,7 +9,7 @@ import * as THREE from "three";
 // in metres, so we just scale it to a sensible footprint, sit it on the floor
 // and centre it — long axis along X to match the daybed.
 const MODEL_URL = "/models/persian_carpet.glb";
-const TARGET_LEN = 3.3; // metres, long axis (extends well beyond the ~1.95m daybed)
+const TARGET_LEN = 2.6; // metres, long axis (a touch beyond the ~1.95m daybed)
 
 function useFittedCarpet() {
   const { scene } = useGLTF(MODEL_URL);
