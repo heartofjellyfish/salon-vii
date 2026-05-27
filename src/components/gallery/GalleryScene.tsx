@@ -531,8 +531,14 @@ function AnchorControls({
       if (key === "Escape") {
         if (inspecting.current) {
           exitInspect();
-          e.preventDefault();
+        } else {
+          // Roam: Esc returns to where you entered the scene — the start anchor at
+          // the room-overview distance — gliding back gently.
+          targetU.current = U[start] ?? 0;
+          roomIdx.current = DEFAULT_ROOM_INDEX;
+          easeLambda.current = 4.5;
         }
+        e.preventDefault();
         return;
       }
       if (key === "+" || key === "=") {
