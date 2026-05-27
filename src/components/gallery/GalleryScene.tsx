@@ -241,12 +241,8 @@ function AnchorControls({
   // Deepest zoom ratio the current painting can show without magnifying its
   // resident texture past ~1:1 (recomputed per frame from texWidth + viewport).
   const minRatio = useRef(1);
-  // Whether the current zoom leaves room to pan (view smaller than the framed
-  // work). At the whole-frame entry there's nothing to roam, so ↑/↓ act on the
-  // zoom axis (↑ → surface, ↓ → exit) rather than panning.
-  const canPan = useRef(false);
-  // Swallow the held ↑ once it has leaned onto the surface, so it stops there
-  // until released instead of immediately panning.
+  // Swallow a held ↑ once it has crossed into inspect / leaned onto the surface,
+  // so it stops there until released instead of running on.
   const swallowUp = useRef(false);
 
   // Pan offsets across the framed work (inspect only), in metres. panTarget moves
@@ -441,17 +437,20 @@ function AnchorControls({
       if (inspecting.current) {
         if (key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight") {
           if (key === "ArrowUp" && swallowUp.current) { e.preventDefault(); return; }
-          if (!canPan.current) {
-            // Whole-frame entry: ↑ leans onto the surface (frame cropped), ↓ exits
-            // back to the room (frame + nameplate); ←/→ have nothing to roam.
+          // While the whole frame is still visible (not yet cropped), ↑ leans onto
+          // the surface and ↓ exits to the room. Once the frame is cropped, ↑/↓
+          // pan. Keyed off the immediate target ratio (not the eased camera) so the
+          // switch to panning is instant after the first ↑.
+          if (inspectRatio.current > 1 / FIT_MARGIN) {
             if (key === "ArrowUp") {
               inspectRatio.current = Math.max(SURFACE_RATIO, minRatio.current);
               swallowUp.current = true; // stop on the surface until ↑ is released
             } else if (key === "ArrowDown") {
               exitInspect();
             }
+            // ←/→ at the whole-frame view: nothing to roam
           } else {
-            heldKeys.current.add(key); // zoomed in → pan the magnifier
+            heldKeys.current.add(key); // frame cropped → pan the magnifier
           }
           e.preventDefault();
         }
@@ -469,8 +468,12 @@ function AnchorControls({
         targetU.current = U[idx];
         e.preventDefault();
       } else if (key === "ArrowUp") {
-        if (roomIdx.current === ROOM_CLOSEST_INDEX) enterInspect(); // at fit → cross into inspect
-        else roomIdx.current -= 1; // dolly closer (auto-repeat = hold to glide in)
+        if (roomIdx.current === ROOM_CLOSEST_INDEX) {
+          enterInspect(); // at fit → cross into inspect
+          swallowUp.current = true; // a ↑ held from the room stops at this first frame until released
+        } else {
+          roomIdx.current -= 1; // dolly closer (auto-repeat = hold to glide in)
+        }
         e.preventDefault();
       } else if (key === "ArrowDown") {
         roomIdx.current = Math.min(roomIdx.current + 1, ROOM_OUT.length - 1);
@@ -564,7 +567,6 @@ function AnchorControls({
     if (inspecting.current) {
       maxX = Math.max(0, framedHalfW - hHalf);
       maxY = Math.max(0, framedHalfH - vHalf);
-      canPan.current = maxX > 1e-3 || maxY > 1e-3;
       const keys = heldKeys.current;
       const speed = PAN_SPEED * (2 * vHalf); // m/s, scales with zoom (screen-heights/s)
       let dx = 0;
@@ -576,7 +578,6 @@ function AnchorControls({
       panXTarget.current += dx * speed * dt;
       panYTarget.current += dy * speed * dt;
     } else {
-      canPan.current = false;
       panXTarget.current = 0;
       panYTarget.current = 0;
     }
