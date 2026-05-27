@@ -91,6 +91,10 @@ const ZOOM_RATE = 1.6;
 // (×/÷ NOTCH from where the press began). So a tap steps, a hold rides.
 const TAP_MS = 200;
 const NOTCH = 1.8;
+// Where ↑ lands you from the whole-frame entry: zoomed in enough that the frame
+// is cropped and you're on the painting surface (clamped to the crisp limit).
+// Mirrors the old first zoom step; ↓ from entry exits to the room.
+const SURFACE_RATIO = 0.6;
 
 // Held-arrow pan speed in screen-heights per second, so roaming feels the same
 // at every zoom. Eased for a soft start/stop.
@@ -237,6 +241,13 @@ function AnchorControls({
   // Deepest zoom ratio the current painting can show without magnifying its
   // resident texture past ~1:1 (recomputed per frame from texWidth + viewport).
   const minRatio = useRef(1);
+  // Whether the current zoom leaves room to pan (view smaller than the framed
+  // work). At the whole-frame entry there's nothing to roam, so ↑/↓ act on the
+  // zoom axis (↑ → surface, ↓ → exit) rather than panning.
+  const canPan = useRef(false);
+  // Swallow the held ↑ once it has leaned onto the surface, so it stops there
+  // until released instead of immediately panning.
+  const swallowUp = useRef(false);
 
   // Pan offsets across the framed work (inspect only), in metres. panTarget moves
   // while an arrow is held; pan eases toward it for a soft start/stop.
@@ -293,6 +304,7 @@ function AnchorControls({
     inspectRatio.current = 1; // land at "whole framed work" — vignette on, then +/- zoom
     panX.current = panY.current = panXTarget.current = panYTarget.current = 0;
     heldKeys.current.clear();
+    swallowUp.current = false;
     easeZoom.current = 6;
     onInspectingChange?.(true, currentArtworkIndex());
   };
@@ -301,6 +313,8 @@ function AnchorControls({
     if (!inspecting.current) return;
     inspecting.current = false;
     zoomDir.current = 0;
+    pressDir.current = 0;
+    swallowUp.current = false;
     roomIdx.current = ROOM_CLOSEST_INDEX; // land at the room-closest stop = just-fits, zoomed out one notch
     panXTarget.current = panYTarget.current = 0;
     heldKeys.current.clear();
@@ -426,7 +440,19 @@ function AnchorControls({
 
       if (inspecting.current) {
         if (key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight") {
-          heldKeys.current.add(key); // held → pan the magnifier (no-op at fit, nothing to roam)
+          if (key === "ArrowUp" && swallowUp.current) { e.preventDefault(); return; }
+          if (!canPan.current) {
+            // Whole-frame entry: ↑ leans onto the surface (frame cropped), ↓ exits
+            // back to the room (frame + nameplate); ←/→ have nothing to roam.
+            if (key === "ArrowUp") {
+              inspectRatio.current = Math.max(SURFACE_RATIO, minRatio.current);
+              swallowUp.current = true; // stop on the surface until ↑ is released
+            } else if (key === "ArrowDown") {
+              exitInspect();
+            }
+          } else {
+            heldKeys.current.add(key); // zoomed in → pan the magnifier
+          }
           e.preventDefault();
         }
         return;
@@ -453,12 +479,14 @@ function AnchorControls({
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_") setZoomDir(0);
+      if (e.key === "ArrowUp") swallowUp.current = false;
       heldKeys.current.delete(e.key);
     };
     const onBlur = () => {
       heldKeys.current.clear();
       zoomDir.current = 0;
       pressDir.current = 0;
+      swallowUp.current = false;
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKeyUp);
@@ -536,6 +564,7 @@ function AnchorControls({
     if (inspecting.current) {
       maxX = Math.max(0, framedHalfW - hHalf);
       maxY = Math.max(0, framedHalfH - vHalf);
+      canPan.current = maxX > 1e-3 || maxY > 1e-3;
       const keys = heldKeys.current;
       const speed = PAN_SPEED * (2 * vHalf); // m/s, scales with zoom (screen-heights/s)
       let dx = 0;
@@ -547,6 +576,7 @@ function AnchorControls({
       panXTarget.current += dx * speed * dt;
       panYTarget.current += dy * speed * dt;
     } else {
+      canPan.current = false;
       panXTarget.current = 0;
       panYTarget.current = 0;
     }
