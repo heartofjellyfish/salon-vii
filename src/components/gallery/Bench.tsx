@@ -1,81 +1,100 @@
 "use client";
 
-import { RoundedBox } from "@react-three/drei";
+import { useMemo } from "react";
+import { useGLTF, ContactShadows } from "@react-three/drei";
+import * as THREE from "three";
 
-// A backless museum gallery bench: tufted oxblood-leather cushion on a dark
-// wood apron, lifted on slim tapered brass legs. Tuned to sit in the warm
-// gold/wood palette of the room. Long axis runs along X (parallel to the
-// main north wall), so visitors face the back-wall paintings when seated.
-const LEN = 1.6;   // length along X
-const DEP = 0.5;   // depth along Z
-const LEG_H = 0.34;
-const APRON_H = 0.07;
-const CUSHION_H = 0.16;
+// Oxblood leather daybed (Sketchfab "Leather Bench", CC) used as the gallery's
+// centrepiece. The source is FBX-derived with non-obvious units / orientation,
+// so instead of hard-coding a scale we measure the real bounds at runtime and
+// auto-fit: rotate the long axis onto X (parallel to the back wall), uniformly
+// scale to a target length, centre it horizontally and seat it on the floor.
+const MODEL_URL = "/models/leather_bench.glb";
+const TARGET_LEN = 1.95; // metres, long axis
 
-const APRON_Y = LEG_H + APRON_H / 2;
-const CUSHION_Y = LEG_H + APRON_H + CUSHION_H / 2;
+function useFittedDaybed() {
+  const { scene } = useGLTF(MODEL_URL);
 
-// Inset positions for the four legs.
-const LEG_X = LEN / 2 - 0.18;
-const LEG_Z = DEP / 2 - 0.12;
+  return useMemo(() => {
+    const o = scene.clone(true);
+    o.position.set(0, 0, 0);
+    o.rotation.set(0, 0, 0);
+    o.scale.set(1, 1, 1);
 
-function Leg({ x, z }: { x: number; z: number }) {
-  return (
-    <mesh position={[x, LEG_H / 2, z]} castShadow>
-      {/* slim tapered brass leg — wider at the top where it meets the apron */}
-      <cylinderGeometry args={[0.018, 0.028, LEG_H, 16]} />
-      <meshStandardMaterial color="#c9a84c" metalness={0.9} roughness={0.32} />
-    </mesh>
-  );
-}
-
-// Sunken upholstery buttons (Chesterfield-style tufting) on the cushion top.
-function Buttons() {
-  const cols = 5;
-  const rows = 2;
-  const top = CUSHION_Y + CUSHION_H / 2 - 0.015;
-  const items: React.ReactNode[] = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const x = (c / (cols - 1) - 0.5) * (LEN - 0.36);
-      const z = (r / (rows - 1) - 0.5) * (DEP - 0.22);
-      items.push(
-        <mesh key={`${r}-${c}`} position={[x, top, z]}>
-          <sphereGeometry args={[0.022, 16, 12]} />
-          <meshStandardMaterial color="#3a1614" roughness={0.5} metalness={0.1} />
-        </mesh>
-      );
+    // 1. orient: make the longer horizontal axis run along X
+    let box = new THREE.Box3().setFromObject(o);
+    let size = box.getSize(new THREE.Vector3());
+    if (size.z > size.x) {
+      o.rotateY(Math.PI / 2);
     }
-  }
-  return <>{items}</>;
+
+    // 2. uniform scale so the long axis hits TARGET_LEN
+    box = new THREE.Box3().setFromObject(o);
+    size = box.getSize(new THREE.Vector3());
+    const s = TARGET_LEN / Math.max(size.x, size.z, 1e-6);
+    o.scale.setScalar(s);
+
+    // 3. centre on X/Z and seat the lowest point on the floor (y = 0)
+    box = new THREE.Box3().setFromObject(o);
+    const center = box.getCenter(new THREE.Vector3());
+    o.position.x -= center.x;
+    o.position.z -= center.z;
+    o.position.y -= box.min.y;
+
+    // Deepen the leather toward oxblood: the bright museum ambient washes the
+    // baked albedo out to a sleepy mid-brown, so multiply the leather (not the
+    // wood) by a warm red to bring back the rich wine seen in the studio render.
+    const oxblood = new THREE.Color(0.7, 0.2, 0.17);
+    o.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      const tint = (m: THREE.Material) => {
+        if (m && /Bench_(Seat|Side|Pillow)/i.test(m.name)) {
+          const c = m.clone() as THREE.MeshStandardMaterial;
+          c.color = oxblood.clone();
+          return c;
+        }
+        return m;
+      };
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map(tint)
+        : tint(mesh.material);
+    });
+
+    return o;
+  }, [scene]);
 }
 
 export default function Bench({ position = [0, 0, -2] as [number, number, number] }) {
+  const daybed = useFittedDaybed();
+
   return (
     <group position={position}>
-      {/* upholstered leather cushion */}
-      <RoundedBox
-        args={[LEN, CUSHION_H, DEP]}
-        radius={0.05}
-        smoothness={4}
-        position={[0, CUSHION_Y, 0]}
-        castShadow
-      >
-        <meshStandardMaterial color="#5b2a26" roughness={0.45} metalness={0.08} />
-      </RoundedBox>
+      <primitive object={daybed} />
 
-      <Buttons />
+      {/* warm accent so the centrepiece reads against the dim room */}
+      <pointLight
+        position={[0, 1.7, 0.9]}
+        intensity={9}
+        distance={6}
+        decay={2}
+        color="#ffd7a0"
+      />
 
-      {/* dark wood apron / frame beneath the cushion */}
-      <mesh position={[0, APRON_Y, 0]} castShadow>
-        <boxGeometry args={[LEN - 0.04, APRON_H, DEP - 0.04]} />
-        <meshStandardMaterial color="#2e2014" roughness={0.6} metalness={0.15} />
-      </mesh>
-
-      <Leg x={LEG_X} z={LEG_Z} />
-      <Leg x={-LEG_X} z={LEG_Z} />
-      <Leg x={LEG_X} z={-LEG_Z} />
-      <Leg x={-LEG_X} z={-LEG_Z} />
+      {/* soft contact shadow to ground it on the parquet */}
+      <ContactShadows
+        position={[0, 0.012, 0]}
+        scale={4}
+        far={2}
+        blur={2.6}
+        opacity={0.55}
+        resolution={1024}
+        color="#1a0e08"
+      />
     </group>
   );
 }
+
+useGLTF.preload(MODEL_URL);
