@@ -4,7 +4,7 @@ import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import type { Artwork, Exhibition } from "@/lib/sanity";
 import FilmGrain from "@/components/FilmGrain";
-import { getMusic, consumeMusicArmed } from "@/lib/music";
+import { getMusic, setMusicSrc, consumeMusicArmed } from "@/lib/music";
 
 const GalleryScene = dynamic(() => import("@/components/gallery/GalleryScene"), {
   ssr: false,
@@ -491,6 +491,10 @@ export default function GalleryPage() {
           // drop its artwork so no painting or frame renders there.
           setArtworks(data.artworks.filter((a: Artwork) => a.position?.wall !== "south"));
           setExhibition(data);
+          // Honour the CMS soundtrack for the deep-link case (no door gesture
+          // armed it) and the manual ♪ button; a no-op if the door already armed
+          // the same track.
+          setMusicSrc(data.backgroundMusicUrl);
         }
       } catch (e) {
         console.error("Failed to load exhibition data", e);

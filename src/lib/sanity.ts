@@ -51,6 +51,7 @@ export interface Exhibition {
   curatorNote: any;
   wallColor: string;
   backgroundMusic?: any;
+  backgroundMusicUrl?: string; // resolved file URL from the API (backgroundMusic.asset->url)
   mode: 'guided' | 'unguided';
   artworks: Artwork[];
 }

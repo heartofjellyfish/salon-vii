@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import FilmGrain from "@/components/FilmGrain";
 import { armMusic } from "@/lib/music";
@@ -8,6 +8,9 @@ import { armMusic } from "@/lib/music";
 export default function HomePage() {
   const [entering, setEntering] = useState(false);
   const router = useRouter();
+  // The CMS-chosen soundtrack URL, captured from the warm-up fetch so the door
+  // click (which must start audio inside the user gesture) can point at it.
+  const musicUrlRef = useRef<string | null>(null);
 
   // Proactively warm the gallery while the visitor reads the wall text: prefetch
   // the route's JS, fetch the exhibition data (stashed for the gallery to reuse),
@@ -34,6 +37,7 @@ export default function HomePage() {
       .then((r) => r.json())
       .then((data) => {
         if (cancelled || !data?.artworks) return;
+        musicUrlRef.current = data.backgroundMusicUrl ?? null;
         try {
           sessionStorage.setItem("sv-exhibition", JSON.stringify(data));
         } catch {}
@@ -69,8 +73,9 @@ export default function HomePage() {
     if (entering) return;
     setEntering(true);
     // This click is the user gesture that unlocks audio: start the soundtrack
-    // silently now so the gallery can fade it in (from 0:00) on reveal.
-    armMusic();
+    // (the CMS track if set, else the bundled default) silently now so the
+    // gallery can fade it in (from 0:00) on reveal.
+    armMusic(musicUrlRef.current);
     setTimeout(() => {
       router.push("/gallery");
     }, 1700);

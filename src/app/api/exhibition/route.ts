@@ -7,6 +7,7 @@ export async function GET() {
     // Try Sanity first
     const exhibition = await sanityClient.fetch(`*[_type == "exhibition"][0]{
       _id, title, subtitle, curatorNote, wallColor, mode,
+      "backgroundMusicUrl": backgroundMusic.asset->url,
       "artworks": artworks[]->{
         _id, title, titleCN, artist, year, image, narrative,
         guidedCommentary, frameStyle, position
