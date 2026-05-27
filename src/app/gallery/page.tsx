@@ -36,6 +36,33 @@ function setAllSaturation(refs: React.MutableRefObject<{ [key: number]: { value:
   Object.values(refs.current).forEach(u => { u.value = value; });
 }
 
+// Ambient soundtrack volume when on, and a gentle linear fade so the music never
+// snaps on or cuts off — it eases in/out under the room like a fader. The shared
+// rafRef lets a new fade cancel a pending one, so rapid on/off toggles can't leave
+// a stale fade-out's pause() firing after we've started playing again.
+const MUSIC_VOLUME = 0.4;
+function fadeAudio(
+  audio: HTMLAudioElement,
+  target: number,
+  duration: number,
+  rafRef: React.MutableRefObject<number>,
+  onDone?: () => void,
+) {
+  cancelAnimationFrame(rafRef.current);
+  const start = audio.volume;
+  const startTime = performance.now();
+  const step = (time: number) => {
+    const t = Math.min((time - startTime) / (duration * 1000), 1);
+    audio.volume = Math.max(0, Math.min(1, start + (target - start) * t));
+    if (t < 1) {
+      rafRef.current = requestAnimationFrame(step);
+    } else if (onDone) {
+      onDone();
+    }
+  };
+  rafRef.current = requestAnimationFrame(step);
+}
+
 // ── Inspect-mode vignette ───────────────────────────────────────────────────
 // A radial darkening overlaid on the scene to draw the eye to the canvas. Alpha
 // follows a power curve t^curve across [start,end] (% of the way to the farthest
@@ -224,6 +251,8 @@ function ControlBar({
   api,
   minimapOn,
   onToggleMinimap,
+  musicOn,
+  onToggleMusic,
 }: {
   phase: "roam" | "entry" | "cropped";
   show: boolean;
@@ -231,6 +260,8 @@ function ControlBar({
   api: React.MutableRefObject<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void } | null>;
   minimapOn: boolean;
   onToggleMinimap: () => void;
+  musicOn: boolean;
+  onToggleMusic: () => void;
 }) {
   return (
     <div style={{
@@ -278,8 +309,18 @@ function ControlBar({
             background: minimapOn && inspecting ? "rgba(201,168,76,0.22)" : "rgba(5,3,8,0.6)",
           }}
         >▦</button>
-        {/* Fixed slot for more controls (music, curator note, …) — add them here so
-            existing buttons keep their positions. */}
+        {/* Ambient music — always available (not gated on inspect), highlights when
+            playing. Toggling it is the user gesture browsers require to start audio. */}
+        <button
+          onClick={onToggleMusic}
+          aria-label="toggle music"
+          title={musicOn ? "音乐 · 关" : "音乐 · 开"}
+          style={{
+            ...ZOOM_BTN, fontSize: 15,
+            borderColor: musicOn ? "rgba(245,222,140,0.95)" : "rgba(201,168,76,0.5)",
+            background: musicOn ? "rgba(201,168,76,0.22)" : "rgba(5,3,8,0.6)",
+          }}
+        >{musicOn ? "♫" : "♪"}</button>
       </div>
     </div>
   );
@@ -303,6 +344,9 @@ export default function GalleryPage() {
   const [inspectCue, setInspectCue] = useState(false); // brief "look closely" prompt on entry
   const [nearBottom, setNearBottom] = useState(false); // mouse near the bottom → reveal controls
   const [showMinimap, setShowMinimap] = useState(true); // thumbnail visible during inspect (toggle)
+  const [musicOn, setMusicOn] = useState(false); // ambient soundtrack on/off (off until the visitor asks)
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const musicFadeRaf = useRef(0);
   const inspectApi = useRef<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void } | null>(null);
   const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number; loadedW?: number; loadedH?: number } }>({});
   const viewRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
@@ -462,10 +506,35 @@ export default function GalleryPage() {
     setActiveArtwork({ index, artwork });
   }, []);
 
+  // Toggle the ambient soundtrack. The click itself is the user gesture browsers
+  // require before audio may start, so play() succeeds the first time. Volume eases
+  // in/out; on stop we pause only after the fade so it doesn't cut off.
+  const handleToggleMusic = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (musicOn) {
+      setMusicOn(false);
+      fadeAudio(audio, 0, 1.2, musicFadeRaf, () => audio.pause());
+    } else {
+      audio.volume = 0;
+      audio.play()
+        .then(() => {
+          setMusicOn(true);
+          fadeAudio(audio, MUSIC_VOLUME, 1.8, musicFadeRaf);
+        })
+        .catch((e) => console.warn("Music playback was blocked", e));
+    }
+  }, [musicOn]);
+
   const currentArtwork = activeArtwork?.artwork;
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#060309", overflow: "hidden" }}>
+      {/* Ambient soundtrack — mounted once at the top level so it keeps playing
+          across mode switches and re-renders. Loops quietly under the room; the
+          bottom control bar's ♪ button turns it on/off. */}
+      <audio ref={audioRef} src="/music/gymnopedie-no-1.mp3" loop preload="auto" />
+
       {/* 3D Gallery — only mounted once we have artworks, so the Suspense gate
           (and its scene-ready signal) is never tripped by an empty room. */}
       {artworks.length > 0 && (
@@ -604,6 +673,8 @@ export default function GalleryPage() {
           api={inspectApi}
           minimapOn={showMinimap}
           onToggleMinimap={() => setShowMinimap((v) => !v)}
+          musicOn={musicOn}
+          onToggleMusic={handleToggleMusic}
         />
       )}
 
