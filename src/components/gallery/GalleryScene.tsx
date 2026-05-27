@@ -13,7 +13,7 @@ import { getPaintingTransform, getFacingDir } from "@/lib/gallery-config";
 import type { Artwork } from "@/lib/sanity";
 
 export interface InspectApi {
-  zoom: (dir: 1 | -1) => void; // +1 = deeper/closer, -1 = back out (past fit = exit)
+  setZoomDir: (dir: -1 | 0 | 1) => void; // hold-to-zoom: +1 in, -1 out (past fit = exit), 0 stop
   exit: () => void;
 }
 
@@ -77,13 +77,15 @@ const NAMEPLATE_DROP = 0.19;
 // a clear step back from the frame-fills inspect entry.
 const MIN_ROOM_RATIO = 1.12;
 
-// Inspect zoom stops as multiples of the bare-frame fit (entry → deepest). Step 0
-// (=1.0) is "just fits" — the whole frame fills the screen. The first press jumps
-// hard to 0.6 (≈1.67×) so the frame leaves the screen and you land on the painting
-// surface; later steps are finer. The list runs deep (to 0.1) to exploit big
-// masters, but each painting only reaches the steps that stay crisp — the
-// per-painting 1:1 clamp (minRatio) stops a low-res work before it would blur.
-const INSPECT_STEPS = [1.0, 0.6, 0.4, 0.28, 0.2, 0.14, 0.1];
+// Inspect zoom is continuous: hold +/- to glide between "frame fills" (ratio 1.0)
+// and the painting's own crisp limit. DEEPEST_RATIO is a hard floor on how far in
+// we'll ever go (≈10× the frame) even if a texture could stay sharp deeper, so the
+// view never becomes a disorienting micro-crop. The per-painting 1:1 clamp
+// (minRatio) usually stops the zoom-in well before this.
+const DEEPEST_RATIO = 0.1;
+// Continuous-zoom speed: the ratio e-folds per second while +/- is held, so a full
+// hold runs ≈1.4s from the whole frame to the deepest crisp point.
+const ZOOM_RATE = 1.6;
 
 // Held-arrow pan speed in screen-heights per second, so roaming feels the same
 // at every zoom. Eased for a soft start/stop.
@@ -217,13 +219,13 @@ function AnchorControls({
   const easeZoom = useRef(9); // softened on entering inspect for a felt "lean in"
   const inspecting = useRef(false);
   const roomIdx = useRef(DEFAULT_ROOM_INDEX); // index into ROOM_OUT
-  const inspectStep = useRef(0); // index into INSPECT_STEPS
+  // Continuous inspect zoom: current ratio of the bare-frame fit (1.0 = frame
+  // fills), glided while +/- is held; zoomDir is -1 (out) / 0 / +1 (in).
+  const inspectRatio = useRef(1);
+  const zoomDir = useRef<-1 | 0 | 1>(0);
   // Deepest zoom ratio the current painting can show without magnifying its
   // resident texture past ~1:1 (recomputed per frame from texWidth + viewport).
   const minRatio = useRef(1);
-  // Once ↑ glides us to fit and enters inspect, swallow the still-held ↑ so it
-  // genuinely STOPS at fit; the visitor must release and press again to go deeper.
-  const swallowUp = useRef(false);
 
   // Pan offsets across the framed work (inspect only), in metres. panTarget moves
   // while an arrow is held; pan eases toward it for a soft start/stop.
@@ -277,10 +279,9 @@ function AnchorControls({
     targetU.current = U[nearestAnchorIndex()]; // centre the work before roaming
     easeLambda.current = 6;
     inspecting.current = true;
-    inspectStep.current = 0; // land at "whole framed work" — vignette on, then + to go in
+    inspectRatio.current = 1; // land at "whole framed work" — vignette on, then +/- zoom
     panX.current = panY.current = panXTarget.current = panYTarget.current = 0;
     heldKeys.current.clear();
-    swallowUp.current = true; // stop here until ↑ is released
     easeZoom.current = 6;
     onInspectingChange?.(true, currentArtworkIndex());
   };
@@ -288,6 +289,7 @@ function AnchorControls({
   const exitInspect = () => {
     if (!inspecting.current) return;
     inspecting.current = false;
+    zoomDir.current = 0;
     roomIdx.current = ROOM_CLOSEST_INDEX; // land at the room-closest stop = just-fits, zoomed out one notch
     panXTarget.current = panYTarget.current = 0;
     heldKeys.current.clear();
@@ -295,26 +297,19 @@ function AnchorControls({
     onInspectingChange?.(false);
   };
 
-  const zoom = (dir: 1 | -1) => {
-    if (!inspecting.current) {
-      if (dir === 1 && roomIdx.current === ROOM_CLOSEST_INDEX) enterInspect();
-      return;
-    }
-    const next = inspectStep.current + dir; // +1 = deeper
-    if (next < 0) {
-      exitInspect(); // zooming back out past the whole work leaves inspect
-      return;
-    }
-    // Don't step deeper than the resident texture stays crisp: the ratio is
-    // clamped to minRatio anyway, so a deeper press would just be a dead no-op.
-    if (dir === 1 && INSPECT_STEPS[inspectStep.current] <= minRatio.current) return;
-    inspectStep.current = Math.min(next, INSPECT_STEPS.length - 1);
+  // Begin/stop a continuous zoom. dir = +1 in, -1 out, 0 stop. From the room (at
+  // the closest stop) a zoom-in first crosses into inspect, then keeps gliding
+  // while held; the per-frame integrator stops it at the crisp limit / exits on
+  // the way back out.
+  const setZoomDir = (dir: -1 | 0 | 1) => {
+    if (dir === 1 && !inspecting.current && roomIdx.current === ROOM_CLOSEST_INDEX) enterInspect();
+    zoomDir.current = inspecting.current ? dir : 0;
   };
 
   // Expose zoom/exit so the DOM zoom buttons can drive the 3D camera.
   useEffect(() => {
     if (!inspectApi) return;
-    inspectApi.current = { zoom, exit: exitInspect };
+    inspectApi.current = { setZoomDir, exit: exitInspect };
     return () => {
       inspectApi.current = null;
     };
@@ -378,14 +373,14 @@ function AnchorControls({
       }
       if (key === "+" || key === "=") {
         if (inspecting.current || roomIdx.current === ROOM_CLOSEST_INDEX) {
-          zoom(1);
+          setZoomDir(1); // held → continuous zoom-in (auto-repeat keydowns just re-arm)
           e.preventDefault();
         }
         return;
       }
       if (key === "-" || key === "_") {
         if (inspecting.current) {
-          zoom(-1);
+          setZoomDir(-1); // held → continuous zoom-out; past frame-fills it exits
           e.preventDefault();
         }
         return;
@@ -393,24 +388,7 @@ function AnchorControls({
 
       if (inspecting.current) {
         if (key === "ArrowUp" || key === "ArrowDown" || key === "ArrowLeft" || key === "ArrowRight") {
-          // ↑, held from the approach, is swallowed until released so we stop at fit.
-          if (key === "ArrowUp" && swallowUp.current) {
-            e.preventDefault();
-            return;
-          }
-          if (inspectStep.current === 0) {
-            // At "just fits" there's nothing to roam, so forward/back map to the
-            // zoom axis: ↑ goes one step deeper (then stop until released), ↓ leaves.
-            if (key === "ArrowUp") {
-              zoom(1);
-              swallowUp.current = true;
-            } else if (key === "ArrowDown") {
-              exitInspect();
-            }
-            // ←/→ at fit: nothing to pan
-          } else {
-            heldKeys.current.add(key); // held → continuous roam, integrated in useFrame
-          }
+          heldKeys.current.add(key); // held → pan the magnifier (no-op at fit, nothing to roam)
           e.preventDefault();
         }
         return;
@@ -436,12 +414,12 @@ function AnchorControls({
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "ArrowUp") swallowUp.current = false;
+      if (e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_") zoomDir.current = 0;
       heldKeys.current.delete(e.key);
     };
     const onBlur = () => {
       heldKeys.current.clear();
-      swallowUp.current = false;
+      zoomDir.current = 0;
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKeyUp);
@@ -473,13 +451,26 @@ function AnchorControls({
     const texW = dims.texWidth ?? 2048;
     minRatio.current = THREE.MathUtils.clamp(
       (dims.pw * fbW) / (2 * texW * hHalfAtFit),
-      INSPECT_STEPS[INSPECT_STEPS.length - 1],
+      DEEPEST_RATIO,
       1
     );
-    // Dolly target: bare-frame fit (inspect — frame fills, clamped to the crisp
-    // limit) or the room base that frames frame + nameplate (room).
+    // Continuous zoom: while +/- is held, glide the ratio geometrically (so the
+    // zoom speed feels constant). Zoom-in stops at the per-painting crisp limit;
+    // zoom-out past frame-fills (ratio ≥ 1) leaves inspect.
+    if (inspecting.current) {
+      if (zoomDir.current !== 0) {
+        inspectRatio.current *= Math.exp(-zoomDir.current * ZOOM_RATE * dt);
+      }
+      if (zoomDir.current < 0 && inspectRatio.current >= 1) {
+        exitInspect();
+      } else {
+        inspectRatio.current = THREE.MathUtils.clamp(inspectRatio.current, minRatio.current, 1);
+      }
+    }
+    // Dolly target: the continuous inspect ratio (frame fills → crisp limit) or the
+    // room base that frames frame + nameplate (room).
     const targetDepth = inspecting.current
-      ? fit * Math.max(INSPECT_STEPS[inspectStep.current], minRatio.current)
+      ? fit * inspectRatio.current
       : roomBaseDepth(dims, aspect) * ROOM_OUT[roomIdx.current];
     // Opening dolly-in: hold far behind the black curtain, then drift in slowly
     // (eyes-opening) to the room overview before normal responsive dollying.

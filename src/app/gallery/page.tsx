@@ -206,7 +206,7 @@ export default function GalleryPage() {
   const [inspectedIndex, setInspectedIndex] = useState<number | null>(null);
   const [inspectCue, setInspectCue] = useState(false); // brief "look closely" prompt on entry
   const [zoomHover, setZoomHover] = useState(false);
-  const inspectApi = useRef<{ zoom: (dir: 1 | -1) => void; exit: () => void } | null>(null);
+  const inspectApi = useRef<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void } | null>(null);
   const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number; loadedW?: number; loadedH?: number } }>({});
   const viewRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
   // ?debug — show a small resolution readout for the inspected painting (hidden
@@ -544,7 +544,7 @@ export default function GalleryPage() {
             fontFamily: "'Cormorant Garamond', serif", fontSize: 12.5,
             letterSpacing: "0.03em", color: "rgba(201,168,76,0.62)",
           }}>
-            方向键漫游 · +/− 缩放 · Esc 退后
+            方向键漫游 · 按住 +/− 缩放 · Esc 退后
           </span>
         </div>
       )}
@@ -563,13 +563,16 @@ export default function GalleryPage() {
           {([["+", 1], ["−", -1]] as const).map(([label, dir]) => (
             <button
               key={label}
-              onClick={() => inspectApi.current?.zoom(dir as 1 | -1)}
+              onPointerDown={(e) => { e.preventDefault(); inspectApi.current?.setZoomDir(dir); }}
+              onPointerUp={() => inspectApi.current?.setZoomDir(0)}
+              onPointerLeave={() => inspectApi.current?.setZoomDir(0)}
+              onPointerCancel={() => inspectApi.current?.setZoomDir(0)}
               aria-label={dir === 1 ? "zoom in" : "zoom out"}
               style={{
                 width: 42, height: 42, borderRadius: "50%", border: "1px solid rgba(201,168,76,0.4)",
                 background: "rgba(5,3,8,0.6)", color: "#c9a84c", cursor: "pointer", fontSize: "1.4rem",
                 display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
-                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", touchAction: "none",
               }}
             >
               {label}
