@@ -268,6 +268,7 @@ function ControlBar({
   onToggleMinimap,
   musicOn,
   onToggleMusic,
+  musicAvailable,
   isTouch,
 }: {
   phase: "roam" | "entry" | "cropped";
@@ -278,6 +279,7 @@ function ControlBar({
   onToggleMinimap: () => void;
   musicOn: boolean;
   onToggleMusic: () => void;
+  musicAvailable: boolean;
   isTouch: boolean;
 }) {
   // Touch has no hover to summon the bar back, so the buttons stay reachable (the
@@ -338,18 +340,21 @@ function ControlBar({
             background: minimapOn && inspecting ? "rgba(201,168,76,0.22)" : "rgba(5,3,8,0.6)",
           }}
         >▦</button>
-        {/* Ambient music — always available (not gated on inspect), highlights when
-            playing. Toggling it is the user gesture browsers require to start audio. */}
-        <button
-          onClick={onToggleMusic}
-          aria-label="toggle music"
-          title={musicOn ? "音乐 · 关" : "音乐 · 开"}
-          style={{
-            ...ZOOM_BTN, ...tBtnSize, fontSize: isTouch ? 19 : 15,
-            borderColor: musicOn ? "rgba(245,222,140,0.95)" : "rgba(201,168,76,0.5)",
-            background: musicOn ? "rgba(201,168,76,0.22)" : "rgba(5,3,8,0.6)",
-          }}
-        >{musicOn ? "♫" : "♪"}</button>
+        {/* Ambient music — shown only when the exhibition has a soundtrack in the
+            CMS (no bundled fallback). Always active (not gated on inspect) and
+            highlights when playing; the click is the gesture browsers require. */}
+        {musicAvailable && (
+          <button
+            onClick={onToggleMusic}
+            aria-label="toggle music"
+            title={musicOn ? "音乐 · 关" : "音乐 · 开"}
+            style={{
+              ...ZOOM_BTN, ...tBtnSize, fontSize: isTouch ? 19 : 15,
+              borderColor: musicOn ? "rgba(245,222,140,0.95)" : "rgba(201,168,76,0.5)",
+              background: musicOn ? "rgba(201,168,76,0.22)" : "rgba(5,3,8,0.6)",
+            }}
+          >{musicOn ? "♫" : "♪"}</button>
+        )}
       </div>
     </div>
   );
@@ -734,6 +739,7 @@ export default function GalleryPage() {
           onToggleMinimap={() => setShowMinimap((v) => !v)}
           musicOn={musicOn}
           onToggleMusic={handleToggleMusic}
+          musicAvailable={!!exhibition?.backgroundMusicUrl}
           isTouch={isTouch}
         />
       )}
