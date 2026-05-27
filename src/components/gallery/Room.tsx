@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
+import CelestialSalonCeiling from "./CelestialSalonCeiling";
 
 const W = 12, H = 4, D = 8;
 const HALF_W = W / 2;
@@ -27,31 +28,6 @@ function tiledClone(base: THREE.Texture, repeatX: number, repeatY: number) {
   t.anisotropy = 8;
   t.needsUpdate = true;
   return t;
-}
-
-// A profiled, protruding cornice with a warm cove glow tucked underneath —
-// reads as a designed crown moulding that catches the picture-light. Runs along
-// local X; the parent group orients it to each wall (protrudes toward +Z).
-function Cornice({ length }: { length: number }) {
-  return (
-    <group>
-      {/* fascia band against the wall */}
-      <mesh position={[0, H - 0.16, 0.03]}>
-        <boxGeometry args={[length, 0.28, 0.06]} />
-        <meshStandardMaterial color="#a8895a" roughness={0.45} metalness={0.35} />
-      </mesh>
-      {/* protruding crown lip — sticks into the room, catches light on its underside */}
-      <mesh position={[0, H - 0.34, 0.13]}>
-        <boxGeometry args={[length, 0.12, 0.24]} />
-        <meshStandardMaterial color="#d8c08a" roughness={0.4} metalness={0.45} />
-      </mesh>
-      {/* warm cove glow under the lip — echoes the gallery's picture-lights */}
-      <mesh position={[0, H - 0.42, 0.14]}>
-        <boxGeometry args={[length, 0.03, 0.2]} />
-        <meshStandardMaterial color="#ffe6bc" emissive="#ffcf9a" emissiveIntensity={1.6} roughness={0.6} />
-      </mesh>
-    </group>
-  );
 }
 
 export default function Room() {
@@ -79,11 +55,10 @@ export default function Room() {
         <meshStandardMaterial map={floorTex} roughness={0.7} metalness={0} />
       </mesh>
 
-      {/* Ceiling */}
-      <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, H, ROOM_CENTER_Z]}>
-        <planeGeometry args={[W, D]} />
-        <meshStandardMaterial color="#2a2430" roughness={0.95} />
-      </mesh>
+      {/* Celestial oculus ceiling: dark plaster border + star dome + gold ring +
+          warm glow + photographic crown moulding + cove light (replaces the old
+          flat ceiling and procedural cornice). */}
+      <CelestialSalonCeiling roomWidth={W} roomDepth={D} ceilingY={H} centerZ={ROOM_CENTER_Z} />
 
       {/* Back wall (north) */}
       <mesh position={[0, H / 2, BACK_Z]} receiveShadow>
@@ -108,12 +83,6 @@ export default function Room() {
         <planeGeometry args={[D, H]} />
         <meshStandardMaterial map={sideWall} roughness={0.85} />
       </mesh>
-
-      {/* Crown moulding — profiled cornice + warm cove glow, on every wall */}
-      <group position={[0, 0, BACK_Z]}><Cornice length={W} /></group>
-      <group position={[0, 0, FRONT_Z]} rotation={[0, Math.PI, 0]}><Cornice length={W} /></group>
-      <group position={[HALF_W, 0, ROOM_CENTER_Z]} rotation={[0, -Math.PI / 2, 0]}><Cornice length={D} /></group>
-      <group position={[-HALF_W, 0, ROOM_CENTER_Z]} rotation={[0, Math.PI / 2, 0]}><Cornice length={D} /></group>
 
       {/* Baseboards — all four walls */}
       <mesh position={[0, 0.1, BACK_Z + 0.05]} receiveShadow><boxGeometry args={[W, 0.2, 0.1]} /><meshStandardMaterial color="#2e2014" roughness={0.7} /></mesh>
