@@ -108,6 +108,12 @@ const SURFACE_RATIO = 0.6;
 // at every zoom. Eased for a soft start/stop.
 const PAN_SPEED = 0.95;
 
+// Mouse wheel / trackpad. In the room each accumulated notch dollies one stop and
+// the closest notch crosses into inspect; in inspect the wheel glides the same
+// continuous zoom as +/-. Scroll up (deltaY < 0) = move closer / zoom in.
+const WHEEL_ZOOM_K = 0.0016; // ratio multiplier per wheel-delta unit
+const ROOM_WHEEL_STEP = 110; // accumulated wheel delta that advances one dolly stop
+
 // The camera opens the show pulled well back into the room, then dollies in to
 // the default standing distance as the black curtain brightens — a slow
 // cinematic push that lands on the first wall. Kept just inside the front wall
@@ -271,6 +277,8 @@ function AnchorControls({
   const panMpp = useRef(0.01);
   const maxXRef = useRef(0);
   const maxYRef = useRef(0);
+  // Wheel/trackpad delta accumulated since the last room dolly step.
+  const wheelAccum = useRef(0);
 
   const sizeRef = useRef(size);
   sizeRef.current = size;
@@ -460,7 +468,9 @@ function AnchorControls({
         if (!dragging.current || e.pointerId !== dragId) return;
         const dx = e.clientX - lastX.current;
         lastX.current = e.clientX;
-        u.current = THREE.MathUtils.clamp(u.current + dx * 0.018, 0, total); // free 1:1 follow
+        // Grab-the-room (iPhone-natural): the wall tracks the finger, so dragging
+        // right pulls the painting on your left into view (camera moves the other way).
+        u.current = THREE.MathUtils.clamp(u.current - dx * 0.018, 0, total);
         targetU.current = u.current;
       } else if (gesture === "pan") {
         const mpp = panMpp.current;
@@ -507,15 +517,43 @@ function AnchorControls({
       }
     };
 
+    // Mouse wheel / trackpad pinch. In the room it dollies through the stops (and
+    // crosses into inspect at the closest); in "look closely" it glides the same
+    // continuous zoom as +/-. preventDefault so the page never scrolls or zooms.
+    const onWheel = (e: WheelEvent) => {
+      if (!active) return;
+      e.preventDefault();
+      if (inspecting.current) {
+        zoomDir.current = 0; // a wheel notch overrides any held-key glide
+        pressDir.current = 0;
+        const next = inspectRatio.current * Math.exp(e.deltaY * WHEEL_ZOOM_K);
+        if (next >= 1) exitInspect(); // scrolled back out past the whole frame
+        else inspectRatio.current = THREE.MathUtils.clamp(next, minRatio.current, 1);
+        return;
+      }
+      wheelAccum.current += e.deltaY;
+      while (wheelAccum.current <= -ROOM_WHEEL_STEP) {
+        wheelAccum.current += ROOM_WHEEL_STEP;
+        if (roomIdx.current === ROOM_CLOSEST_INDEX) { enterInspect(); wheelAccum.current = 0; break; }
+        roomIdx.current -= 1; // scroll up → step closer
+      }
+      while (wheelAccum.current >= ROOM_WHEEL_STEP) {
+        wheelAccum.current -= ROOM_WHEEL_STEP;
+        roomIdx.current = Math.min(roomIdx.current + 1, ROOM_OUT.length - 1); // scroll down → step back
+      }
+    };
+
     el.addEventListener("pointerdown", onDown);
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", endPointer);
     window.addEventListener("pointercancel", endPointer);
+    el.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       el.removeEventListener("pointerdown", onDown);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", endPointer);
       window.removeEventListener("pointercancel", endPointer);
+      el.removeEventListener("wheel", onWheel);
     };
     // exitInspect / nearestAnchorIndex only read refs, so a one-time bind is safe.
     // eslint-disable-next-line react-hooks/exhaustive-deps

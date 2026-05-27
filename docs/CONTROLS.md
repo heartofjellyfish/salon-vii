@@ -67,7 +67,9 @@ Key nuances (all in `AnchorControls`):
 
 | where | action |
 |---|---|
-| room (roam) | **drag** left/right to move between paintings (pointer drag; disabled while inspecting) |
+| room (roam) | **drag** left/right to move between paintings — *grab-the-room* (iPhone-natural: the wall tracks the cursor, so dragging right brings the painting on your left into view). Disabled while inspecting. |
+| room (roam) | **scroll wheel / trackpad** to dolly through the room stops; scrolling in at the closest stop crosses into inspect |
+| inspect | **scroll wheel / trackpad** glides the continuous zoom (scroll up = in); scrolling back out past the whole frame exits |
 | any painting | **click** → opens a full-screen 2D **lightbox** (desktop / guided; on **touch** a tap *looks closely* instead — see Touch) |
 | lightbox | click the backdrop or the **×** to close |
 | control panel (bottom) | **hold** `−` / `+` to zoom (tap = notch); click **▦** to toggle the thumbnail, **♪** to toggle ambient music |
@@ -91,6 +93,10 @@ artwork while viewing.
   holds (zoom never jumps). Controls that don't apply in the current phase **dim in
   place** rather than disappearing. The per-phase **key hints** sit on a separate
   line *above* the buttons and update without shifting them.
+- **First-visit primer** — the very first time a visitor reaches Free mode, a brief
+  centred gesture primer fades in once the room opens (`拖动浏览 · 点击细看 · 滚轮靠近`
+  on desktop, `左右滑动漫步 · 轻触画作贴近看` on touch), then recedes — or dismisses on the
+  first deliberate input. Shown once (`localStorage "sv-onboarded"`).
 - **Thumbnail (minimap) toggle** — the "you are here" minimap is no longer forced
   on; it defaults **on** during inspect and the `▦` button hides/shows it.
 - **Music switch** — a `♪`/`♫` button in the row toggles a looping ambient
@@ -142,7 +148,9 @@ desktop — room → look closely → pan/zoom → exit — expressed with nativ
   pinch-in to exit — a `gesture` state machine), and the `useFrame` that integrates
   dolly / pan / continuous zoom and reports the **phase** via `onPhaseChange`.
   Exposes `inspectApi = { setZoomDir, exit, inspectIndex }`. Tunables (module consts): `VIEW_DIST`, `ROOM_OUT`, `FIT_MARGIN`,
-  `DEEPEST_RATIO`, `ZOOM_RATE`, `TAP_MS`, `NOTCH`, `SURFACE_RATIO`. Refs that hold
+  `DEEPEST_RATIO`, `ZOOM_RATE`, `TAP_MS`, `NOTCH`, `SURFACE_RATIO`, `WHEEL_ZOOM_K`,
+  `ROOM_WHEEL_STEP`. The same effect also holds the `wheel` handler (dolly in the
+  room / glide zoom in inspect). Refs that hold
   the interaction state: `inspectRatio`, `zoomDir`, `pressDir`, `swallowUp`,
   `minRatio`, `roomIdx`, `heldKeys`.
 - **`src/app/gallery/page.tsx`** — all the DOM UI and state: `ControlBar` +

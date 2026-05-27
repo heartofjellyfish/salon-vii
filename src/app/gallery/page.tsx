@@ -391,6 +391,7 @@ export default function GalleryPage() {
   const [controlPhase, setControlPhase] = useState<"roam" | "entry" | "cropped">("roam");
   const [hintsOn, setHintsOn] = useState(false);
   const [isTouch, setIsTouch] = useState(false); // coarse pointer → touch model & always-reachable controls
+  const [showOnboard, setShowOnboard] = useState(false); // first-visit gesture primer, fades after a beat
 
   // Coarse pointer (phone / tablet): no hover to summon the control bar back, so
   // keep it reachable; and swap the keyboard hints for gesture hints. ?touch forces
@@ -467,6 +468,30 @@ export default function GalleryPage() {
     const t = setTimeout(() => setHintsOn(false), 4200);
     return () => clearTimeout(t);
   }, [controlPhase, mode, ready]);
+
+  // First visit only: once the room has opened, fade in a brief primer of the
+  // core gestures (desktop vs touch), then let it recede. Any deliberate input
+  // dismisses it early. Marked seen in localStorage so it shows just once.
+  useEffect(() => {
+    if (!ready || mode !== "unguided") return;
+    let seen = true;
+    try { seen = localStorage.getItem("sv-onboarded") === "1"; } catch {}
+    if (seen) return;
+    try { localStorage.setItem("sv-onboarded", "1"); } catch {}
+    const showT = setTimeout(() => setShowOnboard(true), 2800);
+    const hideT = setTimeout(() => setShowOnboard(false), 9200);
+    const dismiss = () => setShowOnboard(false);
+    window.addEventListener("pointerdown", dismiss);
+    window.addEventListener("keydown", dismiss);
+    window.addEventListener("wheel", dismiss, { passive: true });
+    return () => {
+      clearTimeout(showT);
+      clearTimeout(hideT);
+      window.removeEventListener("pointerdown", dismiss);
+      window.removeEventListener("keydown", dismiss);
+      window.removeEventListener("wheel", dismiss);
+    };
+  }, [ready, mode]);
 
   // Reveal the control panel when the mouse comes down to the bottom of the
   // screen; otherwise it stays out of the way while you look at the work.
@@ -770,6 +795,31 @@ export default function GalleryPage() {
         </div>
       )}
 
+
+      {/* First-visit gesture primer — fades in once the room has opened, then
+          recedes (or on the first deliberate input). Adapts to touch vs desktop. */}
+      {mode === "unguided" && !inspecting && (
+        <div style={{
+          position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", zIndex: 200,
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 8, pointerEvents: "none",
+          opacity: showOnboard ? 1 : 0, transition: "opacity 1.1s ease",
+        }}>
+          <span style={{
+            fontFamily: "'Cormorant Garamond', serif", fontSize: "clamp(17px, 4.4vw, 22px)", fontStyle: "italic",
+            letterSpacing: "0.05em", color: "#c9a84c", textAlign: "center",
+            textShadow: "0 1px 3px rgba(0,0,0,0.95), 0 0 16px rgba(0,0,0,0.75)",
+          }}>
+            {isTouch ? "左右滑动漫步 · 轻触画作贴近看" : "拖动浏览 · 点击细看 · 滚轮靠近"}
+          </span>
+          <span style={{
+            fontFamily: "'Cormorant Garamond', serif", fontSize: 12.5, letterSpacing: "0.12em",
+            color: "rgba(201,168,76,0.62)", textTransform: "uppercase",
+            textShadow: "0 1px 3px rgba(0,0,0,0.9)",
+          }}>
+            {isTouch ? "drag · tap · pinch" : "drag · click · scroll"}
+          </span>
+        </div>
+      )}
 
       {/* Inspect mode — "you are here" minimap (toggle from the control panel) */}
       {mode === "unguided" && inspecting && showMinimap && inspectedIndex != null && artworks[inspectedIndex]?.imageUrl && (
