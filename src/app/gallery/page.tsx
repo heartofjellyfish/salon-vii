@@ -651,16 +651,22 @@ export default function GalleryPage() {
     }
   }, [mode, revealNext]);
 
-  const handleArtworkClick = useCallback((index: number, artwork: Artwork) => {
-    // On touch in free mode, a tap means "look closely" (the signature 3D zoom),
-    // not the flat lightbox. Desktop / guided keep the click→lightbox behaviour.
-    if (isTouch && mode === "unguided") {
-      inspectApi.current?.inspectIndex(index);
-      return;
-    }
-    setLightboxOpen(true);
+  // Click a painting (all devices): two-stage — walk to it at the closest roam
+  // frame, then a second click looks closely. Guided mode is an auto-tour, so
+  // clicks don't respond there.
+  const handleArtworkClick = useCallback((index: number, _artwork: Artwork) => {
+    if (mode !== "unguided") return;
+    inspectApi.current?.tapPainting(index);
+  }, [mode]);
+
+  // Tap a nameplate → description mode (the black-backdrop view: work above,
+  // title / artist / year / narrative below). Free mode only.
+  const handlePlaqueClick = useCallback((index: number, artwork: Artwork) => {
+    if (mode !== "unguided") return;
     setActiveArtwork({ index, artwork });
-  }, [isTouch, mode]);
+    setNarrative(artwork.narrative || "");
+    setLightboxOpen(true);
+  }, [mode]);
 
   // Toggle the ambient soundtrack. The click itself is the user gesture browsers
   // require before audio may start, so play() succeeds the first time. Volume eases
@@ -697,6 +703,7 @@ export default function GalleryPage() {
             setNarrative(aw.narrative || "");
           }}
           onArtworkClick={handleArtworkClick}
+          onPlaqueClick={handlePlaqueClick}
           saturationRefs={saturationRefs}
           paintingDimsRef={paintingDimsRef}
           onInspectingChange={(insp, idx) => {

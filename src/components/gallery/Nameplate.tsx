@@ -57,7 +57,7 @@ function drawText(ctx: CanvasRenderingContext2D, title: string, sub: string, ink
   ctx.fillText(sub, IMG_W / 2, IMG_H * 0.62, IMG_W * 0.66);
 }
 
-export default function Nameplate({ artwork, ph }: { artwork: Artwork; ph: number }) {
+export default function Nameplate({ artwork, ph, onClick }: { artwork: Artwork; ph: number; onClick?: () => void }) {
   const gl = useThree((s) => s.gl);
   const [material, setMaterial] = useState<THREE.MeshStandardMaterial | null>(null);
 
@@ -128,7 +128,13 @@ export default function Nameplate({ artwork, ph }: { artwork: Artwork; ph: numbe
   const plateY = -(ph / 2 + getFrameWidth(artwork.frameStyle) + 0.07 + PLATE_H / 2);
 
   return (
-    <mesh position={[0, plateY, 0.02]} material={material}>
+    <mesh
+      position={[0, plateY, 0.02]}
+      material={material}
+      onClick={onClick ? (e) => { e.stopPropagation(); onClick(); } : undefined}
+      onPointerOver={onClick ? () => { document.body.style.cursor = "pointer"; } : undefined}
+      onPointerOut={onClick ? () => { document.body.style.cursor = ""; } : undefined}
+    >
       <planeGeometry args={[PLATE_W, PLATE_H]} />
     </mesh>
   );

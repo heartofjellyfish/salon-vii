@@ -70,8 +70,9 @@ Key nuances (all in `AnchorControls`):
 | room (roam) | **drag** to page between paintings — *grab-the-room* (iPhone-natural) with **paging**: a swipe past ~46 px or a quick flick advances exactly one painting, then glides home; a short drag settles back. Disabled while inspecting. |
 | room (roam) | **scroll wheel / trackpad** glides the **continuous** room depth (closer / back); scrolling in past the closest point crosses into inspect |
 | inspect | **two-finger scroll / trackpad** pans the magnifier; a **pinch** (ctrl+wheel) glides the continuous zoom; scrolling/pinching back out past the whole frame exits |
-| any painting | **click** → opens a full-screen 2D **lightbox** (desktop / guided; on **touch** a tap *looks closely* instead — see Touch) |
-| lightbox | click the backdrop or the **×** to close |
+| any painting | **click** → walk to it at the closest roam frame; **click again** (centred + closest) → look closely. Two-stage, same on every device. No-op in Guided mode and while inspecting. |
+| any nameplate | **click** → **description mode** (full-screen: work above, title / artist / year / narrative below). Free mode only. |
+| description mode | click the backdrop or the **×** to close |
 | minimap | **drag** the locator thumbnail to fly the view across the work (mouse or touch) |
 | control panel (bottom) | **hold** `−` / `+` to zoom (tap = notch); the locator button toggles the thumbnail, **♪** toggles ambient music |
 | bottom-right | **mode toggle** button (Free ↔ Guided) |
@@ -117,7 +118,8 @@ desktop — room → look closely → pan/zoom → exit — expressed with nativ
 |---|---|---|
 | room | one-finger drag | **page** between paintings — one swipe/flick = one painting (iOS-style), then glides home |
 | room | **two-finger pinch** | dolly toward / away from the wall (pinch out = walk closer); pinch in past the closest stop crosses into inspect |
-| room | **tap a painting** | walk to it and look closely (no flat lightbox on touch) |
+| room | **tap a painting** | walk to it at the closest frame; **tap again** → look closely (two-stage) |
+| room | **tap a nameplate** | open **description mode** (work + title / artist / year / narrative) |
 | inspect | one-finger drag | pan the magnifier across the surface |
 | inspect | **double-tap** | toggle zoom — whole frame ⇄ painting surface (recentres on the way out) |
 | inspect | **two-finger pinch** | zoom in / out (clamped to the 1:1 crisp limit) |
@@ -137,8 +139,6 @@ desktop — room → look closely → pan/zoom → exit — expressed with nativ
 ### Touch ideas not yet done (open for the controls session)
 - Momentum / rubber-band polish on the paging, pinch and swipe.
 - iPad-specific affordances (more screen, Pencil) vs the small iPhone layout.
-- A **description / 说明 mode** (black backdrop, work above, text below) from the
-  nameplate — see the click-routing rework.
 
 ---
 
@@ -151,8 +151,10 @@ desktop — room → look closely → pan/zoom → exit — expressed with nativ
   machine incl. `roompinch`), the `wheel` handler (continuous roam dolly; inspect:
   two-finger scroll pans, ctrl+wheel pinch-zooms), and the `useFrame` that integrates
   dolly / pan / continuous zoom and reports the **phase** via `onPhaseChange`.
-  Exposes `inspectApi = { setZoomDir, exit, inspectIndex, setView }` (`setView` drives
-  the draggable minimap). Tunables (module consts): `VIEW_DIST`, `ROOM_OUT`, `FIT_MARGIN`,
+  Exposes `inspectApi = { setZoomDir, exit, tapPainting, setView }` (`tapPainting`
+  is the two-stage painting click; `setView` drives the draggable minimap). Painting
+  clicks route through `onArtworkClick`; nameplate clicks through `onPlaqueClick`
+  (→ description mode, reusing the lightbox). Tunables (module consts): `VIEW_DIST`, `ROOM_OUT`, `FIT_MARGIN`,
   `DEEPEST_RATIO`, `ZOOM_RATE`, `TAP_MS`, `NOTCH`, `SURFACE_RATIO`, `WHEEL_ZOOM_K`,
   `WHEEL_ROAM_K`, `DRAG_SENS`, `SWIPE_MIN`, `FLICK_MIN`, `SETTLE_LAMBDA`,
   `DOUBLE_TAP_MS`. Refs that hold the interaction state: `inspectRatio`, `zoomDir`,

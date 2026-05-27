@@ -15,7 +15,9 @@ import type { Artwork } from "@/lib/sanity";
 export interface InspectApi {
   setZoomDir: (dir: -1 | 0 | 1) => void; // hold-to-zoom: +1 in, -1 out (past fit = exit), 0 stop
   exit: () => void;
-  inspectIndex: (artworkIndex: number) => void; // tap a painting → walk to it and look closely
+  // Click a painting: walk to it at the closest roam frame; click again once it's
+  // centred & closest → look closely. (Two-stage; no-op while inspecting.)
+  tapPainting: (artworkIndex: number) => void;
   setView: (cx: number, cy: number) => void; // minimap drag → centre the view on framed coords (0..1)
 }
 
@@ -48,6 +50,7 @@ interface GallerySceneProps {
   onReady?: () => void;
   onArtworkRevealed?: (index: number, artwork: Artwork) => void;
   onArtworkClick?: (index: number, artwork: Artwork) => void;
+  onPlaqueClick?: (index: number, artwork: Artwork) => void; // nameplate tap → description mode
   saturationRefs: React.MutableRefObject<{ [key: number]: { value: number } }>;
   paintingDimsRef: React.MutableRefObject<{ [index: number]: PaintingDims }>;
   onInspectingChange?: (inspecting: boolean, artworkIndex?: number) => void;
@@ -372,12 +375,21 @@ function AnchorControls({
     onInspectingChange?.(false);
   };
 
-  // Tap-to-inspect (touch): slide to face the tapped painting, then look closely.
-  const inspectIndex = (artworkIndex: number) => {
-    if (inspecting.current) return;
+  // Click a painting (two-stage). If it's the one you're already centred on at the
+  // closest roam frame → look closely. Otherwise walk to it and pull in to that
+  // closest frame (whole frame + nameplate); a second click then looks closely.
+  const tapPainting = (artworkIndex: number) => {
+    if (inspecting.current) return; // looking closely → clicks do nothing
     const anchorIdx = anchors.findIndex((a) => a.artworkIndex === artworkIndex);
-    if (anchorIdx >= 0) targetU.current = U[anchorIdx];
-    enterInspect();
+    if (anchorIdx < 0) return;
+    if (nearestAnchorIndex() === anchorIdx && atClosest()) {
+      enterInspect();
+    } else {
+      targetU.current = U[anchorIdx];
+      roomIdx.current = ROOM_CLOSEST_INDEX;
+      roamFactor.current = ROOM_OUT[ROOM_CLOSEST_INDEX];
+      easeLambda.current = 5; // graceful glide over to face it
+    }
   };
 
   // Press/hold zoom. dir = +1 in, -1 out, 0 = release. A press starts a continuous
@@ -431,7 +443,7 @@ function AnchorControls({
   // Expose zoom/exit so the DOM zoom buttons can drive the 3D camera.
   useEffect(() => {
     if (!inspectApi) return;
-    inspectApi.current = { setZoomDir, exit: exitInspect, inspectIndex, setView };
+    inspectApi.current = { setZoomDir, exit: exitInspect, tapPainting, setView };
     return () => {
       inspectApi.current = null;
     };
@@ -924,6 +936,7 @@ function SceneContent({
   revealed,
   onArtworkRevealed,
   onArtworkClick,
+  onPlaqueClick,
   saturationRefs,
   paintingDimsRef,
   onInspectingChange,
@@ -973,6 +986,7 @@ function SceneContent({
               hiRes={!!inspecting && inspectedIndex === index}
               onReveal={onArtworkRevealed}
               onClick={onArtworkClick}
+              onPlaqueClick={onPlaqueClick}
             />
           </PaintingBoundary>
         ))}
@@ -988,6 +1002,7 @@ export default function GalleryScene({
   onReady,
   onArtworkRevealed,
   onArtworkClick,
+  onPlaqueClick,
   saturationRefs,
   paintingDimsRef,
   onInspectingChange,
@@ -1016,6 +1031,7 @@ export default function GalleryScene({
         onReady={handleReady}
         onArtworkRevealed={onArtworkRevealed}
         onArtworkClick={onArtworkClick}
+        onPlaqueClick={onPlaqueClick}
         saturationRefs={saturationRefs}
         paintingDimsRef={paintingDimsRef}
         onInspectingChange={onInspectingChange}

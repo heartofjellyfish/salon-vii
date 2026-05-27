@@ -22,6 +22,7 @@ interface PaintingProps {
   hiRes?: boolean;
   onReveal?: (index: number, artwork: Artwork) => void;
   onClick?: (index: number, artwork: Artwork) => void;
+  onPlaqueClick?: (index: number, artwork: Artwork) => void;
 }
 
 // Master pixel width encoded in the Sanity asset ref (…-<W>x<H>-<ext>). Sanity
@@ -114,7 +115,7 @@ function SaturationMaterial({
   );
 }
 
-export default function Painting({ artwork, index, saturationRefs, paintingDimsRef, mode, hiRes, onReveal, onClick }: PaintingProps) {
+export default function Painting({ artwork, index, saturationRefs, paintingDimsRef, mode, hiRes, onReveal, onClick, onPlaqueClick }: PaintingProps) {
   const { position, rotation } = getPaintingTransform(artwork.position);
   const facing = getFacingDir(artwork.position?.wall || "north");
   const groupRef = useRef<THREE.Group>(null!);
@@ -233,7 +234,11 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
       </group>
 
       {/* Plaque */}
-      <Nameplate artwork={artwork} ph={ph} />
+      <Nameplate
+        artwork={artwork}
+        ph={ph}
+        onClick={onPlaqueClick ? () => onPlaqueClick(index, artwork) : undefined}
+      />
 
     </group>
 
