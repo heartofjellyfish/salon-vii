@@ -62,6 +62,21 @@ function pickHiResWidth(gl: THREE.WebGLRenderer, artwork: Artwork): number {
   return Math.round(cap);
 }
 
+// The wall-view (roam) texture width. A painting on a phone screen is small, and
+// every painting holds its base texture resident at once — so many full 2048²
+// textures can exhaust a phone's GPU memory and leave a frame with a blank canvas.
+// Phones load a lighter base for the room; the crisp adaptive master still loads
+// for the single work being inspected (pickHiResWidth), so close-up quality is
+// unchanged.
+function pickBaseWidth(): number {
+  if (typeof window === "undefined") return 2048;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const longEdge = Math.max(window.screen?.width || 0, window.screen?.height || 0) * dpr;
+  if (longEdge && longEdge <= 1900) return 1280; // phones
+  if (longEdge && longEdge <= 2600) return 1600; // large phones / small tablets
+  return 2048;
+}
+
 function SaturationMaterial({
   base,
   hiRes,
@@ -125,11 +140,14 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
   const hiResWidth = useMemo(() => pickHiResWidth(gl, artwork), [gl, artwork]);
   const inspectTexWidth = Math.max(2048, hiResWidth);
 
-  // Wall texture: the standard-resolution image. The exhibition API pre-builds a
-  // 2048px URL; this fallback matches it for the rare path where it isn't set.
+  // Wall texture for the room view. On phones request a lighter width (saves GPU
+  // memory across all the resident paintings — see pickBaseWidth); on desktop keep
+  // the exhibition API's pre-built 2048px URL. The Wikimedia fallback (no Sanity
+  // asset) just uses whatever imageUrl it has.
+  const baseW = pickBaseWidth();
   let imageUrl = artwork.imageUrl;
-  if (!imageUrl && artwork.image?.asset) {
-    imageUrl = urlFor(artwork.image).width(2048).auto("format").url();
+  if (artwork.image?.asset && (baseW < 2048 || !imageUrl)) {
+    imageUrl = urlFor(artwork.image).width(baseW).auto("format").url();
   }
 
   if (!imageUrl) {
