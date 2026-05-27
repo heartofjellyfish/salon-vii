@@ -43,6 +43,9 @@ interface GallerySceneProps {
   onInspectingChange?: (inspecting: boolean, artworkIndex?: number) => void;
   inspectApi?: React.MutableRefObject<InspectApi | null>;
   viewRef?: React.MutableRefObject<InspectView | null>;
+  // Which painting is being inspected, so it alone loads the high-res master.
+  inspecting?: boolean;
+  inspectedIndex?: number | null;
 }
 
 const VIEW_DIST = 3.2; // metres back from the wall — close, comfortable viewing distance
@@ -555,6 +558,8 @@ function SceneContent({
   onInspectingChange,
   inspectApi,
   viewRef,
+  inspecting,
+  inspectedIndex,
 }: GallerySceneProps & { revealed: boolean }) {
   const { anchors, start } = useMemo(() => buildAnchors(artworks), [artworks]);
   return (
@@ -592,6 +597,7 @@ function SceneContent({
               saturationRefs={saturationRefs}
               paintingDimsRef={paintingDimsRef}
               mode={mode}
+              hiRes={!!inspecting && inspectedIndex === index}
               onReveal={onArtworkRevealed}
               onClick={onArtworkClick}
             />
@@ -614,6 +620,8 @@ export default function GalleryScene({
   onInspectingChange,
   inspectApi,
   viewRef,
+  inspecting,
+  inspectedIndex,
 }: GallerySceneProps) {
   const [revealed, setRevealed] = useState(false);
   const handleReady = useCallback(() => {
@@ -639,6 +647,8 @@ export default function GalleryScene({
         onInspectingChange={onInspectingChange}
         inspectApi={inspectApi}
         viewRef={viewRef}
+        inspecting={inspecting}
+        inspectedIndex={inspectedIndex}
       />
     </Canvas>
   );

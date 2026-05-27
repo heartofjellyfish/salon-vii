@@ -337,6 +337,8 @@ export default function GalleryPage() {
           }}
           inspectApi={inspectApi}
           viewRef={viewRef}
+          inspecting={inspecting}
+          inspectedIndex={inspectedIndex}
         />
       )}
 
