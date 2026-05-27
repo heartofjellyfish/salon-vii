@@ -67,7 +67,7 @@ Key nuances (all in `AnchorControls`):
 | room (roam) | **drag** left/right to move between paintings (pointer drag; disabled while inspecting) |
 | any painting | **click** → opens a full-screen 2D **lightbox** of that work |
 | lightbox | click the backdrop or the **×** to close |
-| control panel (bottom) | **hold** `−` / `+` to zoom (tap = notch); click **▦** to toggle the thumbnail |
+| control panel (bottom) | **hold** `−` / `+` to zoom (tap = notch); click **▦** to toggle the thumbnail, **♪** to toggle ambient music |
 | bottom-right | **mode toggle** button (Free ↔ Guided) |
 | guided mode | prev / next buttons + progress dots (bottom-centre) |
 
@@ -83,15 +83,17 @@ artwork while viewing.
   whenever the **phase changes** (the keys change meaning). It recedes after the
   ~4.2 s flash or when the cursor leaves the bottom.
 - **Fixed button positions** — the buttons are a constant row (zoom `−`, zoom `+`,
-  thumbnail `▦`) that occupies the **same slots in every phase**, so muscle memory
+  thumbnail `▦`, music `♪`/`♫`) that occupies the **same slots in every phase**, so muscle memory
   holds (zoom never jumps). Controls that don't apply in the current phase **dim in
   place** rather than disappearing. The per-phase **key hints** sit on a separate
   line *above* the buttons and update without shifting them.
 - **Thumbnail (minimap) toggle** — the "you are here" minimap is no longer forced
   on; it defaults **on** during inspect and the `▦` button hides/shows it.
-- **Reserved fixed slot** in the button row for: the **music switch** (being built
-  in a separate session — drop the button into the slot there) and the **curator's
-  note**.
+- **Music switch** — a `♪`/`♫` button in the row toggles a looping ambient
+  soundtrack (off by default; volume eases in/out, the click being the user gesture
+  browsers require to start audio). Unlike the zoom/thumbnail buttons it is **always
+  active**, not gated on inspect. One **fixed slot** remains reserved for the
+  **curator's note**.
 
 ---
 
