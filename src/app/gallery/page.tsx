@@ -433,7 +433,7 @@ export default function GalleryPage() {
         opacity: 1, transition: "opacity 1s ease 3s",
       }}>
         <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, #c9a84c, #8b6914)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#2a1a08", fontWeight: 600 }}>VII</div>
-        <span style={{ fontSize: 11, color: "rgba(201,168,76,0.7)", fontStyle: "italic" }}>策展人的话 · Curator{"'"}s Note</span>
+        <span style={{ fontSize: 11, color: "rgba(201,168,76,0.9)", fontStyle: "italic", textShadow: "0 1px 3px rgba(0,0,0,0.92), 0 0 10px rgba(0,0,0,0.6)" }}>策展人的话 · Curator{"'"}s Note</span>
       </div>
 
       {/* Narrative Panel */}
@@ -511,7 +511,8 @@ export default function GalleryPage() {
           </div>
           <span style={{
             fontFamily: "'Cormorant Garamond', serif", fontSize: 12.5, fontStyle: "italic",
-            letterSpacing: "0.04em", color: "rgba(201,168,76,0.72)", whiteSpace: "nowrap",
+            letterSpacing: "0.04em", color: "rgba(201,168,76,0.92)", whiteSpace: "nowrap",
+            textShadow: "0 1px 3px rgba(0,0,0,0.92), 0 0 10px rgba(0,0,0,0.6)",
           }}>
             方向键漫步展厅 · use the arrow keys to wander
           </span>
@@ -537,12 +538,14 @@ export default function GalleryPage() {
           <span style={{
             fontFamily: "'Cormorant Garamond', serif", fontSize: 19, fontStyle: "italic",
             letterSpacing: "0.06em", color: "#c9a84c",
+            textShadow: "0 1px 3px rgba(0,0,0,0.95), 0 0 14px rgba(0,0,0,0.7)",
           }}>
             贴近观看 · look closely
           </span>
           <span style={{
             fontFamily: "'Cormorant Garamond', serif", fontSize: 12.5,
-            letterSpacing: "0.03em", color: "rgba(201,168,76,0.62)",
+            letterSpacing: "0.03em", color: "rgba(201,168,76,0.92)",
+            textShadow: "0 1px 3px rgba(0,0,0,0.95), 0 0 10px rgba(0,0,0,0.65)",
           }}>
             方向键漫游 · 按住 +/− 缩放 · Esc 退后
           </span>
