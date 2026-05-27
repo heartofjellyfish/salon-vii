@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import type { Artwork, Exhibition } from "@/lib/sanity";
 import FilmGrain from "@/components/FilmGrain";
+import { getMusic, consumeMusicArmed } from "@/lib/music";
 
 const GalleryScene = dynamic(() => import("@/components/gallery/GalleryScene"), {
   ssr: false,
@@ -372,8 +373,7 @@ export default function GalleryPage() {
   const [inspectCue, setInspectCue] = useState(false); // brief "look closely" prompt on entry
   const [nearBottom, setNearBottom] = useState(false); // mouse near the bottom → reveal controls
   const [showMinimap, setShowMinimap] = useState(true); // thumbnail visible during inspect (toggle)
-  const [musicOn, setMusicOn] = useState(false); // ambient soundtrack on/off (off until the visitor asks)
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const [musicOn, setMusicOn] = useState(false); // ambient soundtrack on/off
   const musicFadeRaf = useRef(0);
   const inspectApi = useRef<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void; inspectIndex: (artworkIndex: number) => void } | null>(null);
   const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number; loadedW?: number; loadedH?: number } }>({});
@@ -426,6 +426,20 @@ export default function GalleryPage() {
     if (!ready) return;
     const t = setTimeout(() => setOverlayGone(true), 3000);
     return () => clearTimeout(t);
+  }, [ready]);
+
+  // Bring the soundtrack up in step with the room opening — but only if the
+  // visitor entered through the door, which armed + unlocked the audio on that
+  // click. Reset to 0:00 so the audible music starts at the top, synced to the
+  // reveal, even though it has been playing silently since the door.
+  useEffect(() => {
+    if (!ready || !consumeMusicArmed()) return;
+    const audio = getMusic();
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.play()
+      .then(() => { setMusicOn(true); fadeAudio(audio, MUSIC_VOLUME, 2.6, musicFadeRaf); })
+      .catch(() => {});
   }, [ready]);
 
   // When inspect mode begins, flash the "look closely" prompt and zoom buttons,
@@ -557,13 +571,12 @@ export default function GalleryPage() {
   // require before audio may start, so play() succeeds the first time. Volume eases
   // in/out; on stop we pause only after the fade so it doesn't cut off.
   const handleToggleMusic = useCallback(() => {
-    const audio = audioRef.current;
+    const audio = getMusic();
     if (!audio) return;
     if (musicOn) {
       setMusicOn(false);
       fadeAudio(audio, 0, 1.2, musicFadeRaf, () => audio.pause());
     } else {
-      audio.volume = 0;
       audio.play()
         .then(() => {
           setMusicOn(true);
@@ -577,11 +590,6 @@ export default function GalleryPage() {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#060309", overflow: "hidden" }}>
-      {/* Ambient soundtrack — mounted once at the top level so it keeps playing
-          across mode switches and re-renders. Loops quietly under the room; the
-          bottom control bar's ♪ button turns it on/off. */}
-      <audio ref={audioRef} src="/music/gymnopedie-no-1.mp3" loop preload="auto" />
-
       {/* 3D Gallery — only mounted once we have artworks, so the Suspense gate
           (and its scene-ready signal) is never tripped by an empty room. */}
       {artworks.length > 0 && (

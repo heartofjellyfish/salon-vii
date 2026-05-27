@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import FilmGrain from "@/components/FilmGrain";
+import { armMusic } from "@/lib/music";
 
 export default function HomePage() {
   const [entering, setEntering] = useState(false);
@@ -67,6 +68,9 @@ export default function HomePage() {
   const handleEnter = useCallback(() => {
     if (entering) return;
     setEntering(true);
+    // This click is the user gesture that unlocks audio: start the soundtrack
+    // silently now so the gallery can fade it in (from 0:00) on reveal.
+    armMusic();
     setTimeout(() => {
       router.push("/gallery");
     }, 1700);
