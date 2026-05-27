@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import type { Artwork, Exhibition } from "@/lib/sanity";
+import type { InspectApi } from "@/components/gallery/GalleryScene";
 import FilmGrain from "@/components/FilmGrain";
 import { getMusic, setMusicSrc, consumeMusicArmed } from "@/lib/music";
 
@@ -101,13 +102,26 @@ function InspectMinimap({
   dims,
   viewRef,
   isTouch,
+  api,
 }: {
   imageUrl: string;
   dims: { pw: number; ph: number; frameWidth: number };
   viewRef: React.MutableRefObject<{ cx: number; cy: number; w: number; h: number } | null>;
   isTouch: boolean;
+  api: React.MutableRefObject<InspectApi | null>;
 }) {
   const rectRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+  // Click / drag anywhere on the thumbnail to fly the view there (framed-normalised
+  // coords). Works with mouse + touch; keyboard arrows still pan in 3D.
+  const moveTo = (clientX: number, clientY: number) => {
+    const r = boxRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const cx = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+    const cy = Math.min(1, Math.max(0, (clientY - r.top) / r.height));
+    api.current?.setView(cx, cy);
+  };
   useEffect(() => {
     let raf = 0;
     const tick = () => {
@@ -156,22 +170,29 @@ function InspectMinimap({
       border: "1px solid rgba(201,168,76,0.28)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)",
       boxShadow: "0 6px 20px rgba(0,0,0,0.4)",
     }}>
-      <div style={{ position: "relative", width: boxW, height: boxH, borderRadius: 2, overflow: "hidden" }}>
+      <div
+        ref={boxRef}
+        onPointerDown={(e) => { e.stopPropagation(); draggingRef.current = true; (e.currentTarget as Element).setPointerCapture?.(e.pointerId); moveTo(e.clientX, e.clientY); }}
+        onPointerMove={(e) => { if (draggingRef.current) moveTo(e.clientX, e.clientY); }}
+        onPointerUp={() => { draggingRef.current = false; }}
+        onPointerCancel={() => { draggingRef.current = false; }}
+        style={{ position: "relative", width: boxW, height: boxH, borderRadius: 2, overflow: "hidden", pointerEvents: "auto", cursor: "crosshair", touchAction: "none" }}
+      >
         {/* gilt frame */}
         <div style={{
-          position: "absolute", inset: 0,
+          position: "absolute", inset: 0, pointerEvents: "none",
           background: "linear-gradient(135deg, #d8b765 0%, #b8923f 45%, #7c5e29 100%)",
           boxShadow: "inset 0 0 3px rgba(0,0,0,0.5)",
         }} />
         {/* canvas, inset by the frame thickness */}
-        <img src={imageUrl} alt="" style={{
+        <img src={imageUrl} alt="" draggable={false} style={{
           position: "absolute", top: insetY + "%", left: insetX + "%",
           width: 100 - 2 * insetX + "%", height: 100 - 2 * insetY + "%",
-          objectFit: "fill", opacity: 0.9,
+          objectFit: "fill", opacity: 0.9, pointerEvents: "none",
         }} />
         {/* current view, in framed coordinates */}
         <div ref={rectRef} style={{
-          position: "absolute", boxSizing: "border-box", border: "1.5px solid rgba(245,222,140,0.97)",
+          position: "absolute", boxSizing: "border-box", border: "1.5px solid rgba(245,222,140,0.97)", pointerEvents: "none",
           background: "rgba(201,168,76,0.14)", boxShadow: "0 0 6px rgba(0,0,0,0.7)", transition: "opacity 0.25s ease",
         }} />
       </div>
@@ -259,6 +280,17 @@ const ZOOM_BTN: React.CSSProperties = {
   boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
 };
 
+// A small "locator" glyph for the minimap toggle — a framed work with a bright
+// viewport rectangle inside, far clearer than the old ▦ square.
+function MinimapIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" aria-hidden style={{ display: "block" }}>
+      <rect x="2.3" y="3.6" width="15.4" height="12.8" rx="1.6" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="4.4" y="5.7" width="7" height="5" rx="0.9" fill="currentColor" />
+    </svg>
+  );
+}
+
 function ControlBar({
   phase,
   show,
@@ -270,17 +302,19 @@ function ControlBar({
   onToggleMusic,
   musicAvailable,
   isTouch,
+  isLandscape,
 }: {
   phase: "roam" | "entry" | "cropped";
   show: boolean;
   inspecting: boolean;
-  api: React.MutableRefObject<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void; inspectIndex: (artworkIndex: number) => void } | null>;
+  api: React.MutableRefObject<InspectApi | null>;
   minimapOn: boolean;
   onToggleMinimap: () => void;
   musicOn: boolean;
   onToggleMusic: () => void;
   musicAvailable: boolean;
   isTouch: boolean;
+  isLandscape: boolean;
 }) {
   // Touch has no hover to summon the bar back, so the buttons stay reachable (the
   // bar sits up); the hint line still only flashes (show) so it doesn't sit over
@@ -289,9 +323,10 @@ function ControlBar({
   const tBtnSize: React.CSSProperties = isTouch ? { width: 42, height: 42 } : {};
   return (
     <div style={{
-      // On touch the bar sits a row higher so its right-hand button clears the
-      // bottom-right mode toggle on a narrow phone; on desktop it hugs the bottom.
-      position: "fixed", bottom: isTouch ? "calc(84px + env(safe-area-inset-bottom))" : "calc(22px + env(safe-area-inset-bottom))", left: 0, right: 0, zIndex: 210,
+      // On a narrow portrait phone the bar sits a row higher so its right-hand
+      // button clears the bottom-right mode toggle; in landscape (wide) there's no
+      // such collision so it hugs the bottom, and on desktop likewise.
+      position: "fixed", bottom: isTouch && !isLandscape ? "calc(84px + env(safe-area-inset-bottom))" : "calc(22px + env(safe-area-inset-bottom))", left: 0, right: 0, zIndex: 210,
       display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
       opacity: barUp ? 1 : 0, transition: "opacity 0.45s ease", pointerEvents: "none",
     }}>
@@ -331,15 +366,15 @@ function ControlBar({
         <button
           disabled={!inspecting}
           onClick={onToggleMinimap}
-          aria-label="toggle thumbnail"
-          title="缩略图"
+          aria-label="toggle locator thumbnail"
+          title="位置缩略图 · Locator"
           style={{
-            ...ZOOM_BTN, ...tBtnSize, fontSize: isTouch ? 18 : 14,
+            ...ZOOM_BTN, ...tBtnSize,
             opacity: inspecting ? 1 : 0.3, cursor: inspecting ? "pointer" : "default",
             borderColor: minimapOn && inspecting ? "rgba(245,222,140,0.95)" : "rgba(201,168,76,0.4)",
             background: minimapOn && inspecting ? "rgba(201,168,76,0.22)" : "rgba(5,3,8,0.6)",
           }}
-        >▦</button>
+        ><MinimapIcon size={isTouch ? 20 : 17} /></button>
         {/* Ambient music — shown only when the exhibition has a soundtrack in the
             CMS (no bundled fallback). Always active (not gated on inspect) and
             highlights when playing; the click is the gesture browsers require. */}
@@ -354,6 +389,20 @@ function ControlBar({
               background: musicOn ? "rgba(201,168,76,0.22)" : "rgba(5,3,8,0.6)",
             }}
           >{musicOn ? "♫" : "♪"}</button>
+        )}
+        {/* Touch has no Esc key — a clear exit button while looking closely (dimmed
+            in place otherwise, so the row never shifts). */}
+        {isTouch && (
+          <button
+            disabled={!inspecting}
+            onClick={() => api.current?.exit()}
+            aria-label="exit look closely"
+            title="退出 · Exit"
+            style={{
+              ...ZOOM_BTN, ...tBtnSize, fontSize: 22,
+              opacity: inspecting ? 1 : 0.3, cursor: inspecting ? "pointer" : "default",
+            }}
+          >×</button>
         )}
       </div>
     </div>
@@ -380,7 +429,7 @@ export default function GalleryPage() {
   const [showMinimap, setShowMinimap] = useState(true); // thumbnail visible during inspect (toggle)
   const [musicOn, setMusicOn] = useState(false); // ambient soundtrack on/off
   const musicFadeRaf = useRef(0);
-  const inspectApi = useRef<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void; inspectIndex: (artworkIndex: number) => void } | null>(null);
+  const inspectApi = useRef<InspectApi | null>(null);
   const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number; loadedW?: number; loadedH?: number } }>({});
   const viewRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
   // ?debug — show a small resolution readout for the inspected painting (hidden
@@ -392,6 +441,9 @@ export default function GalleryPage() {
   const [hintsOn, setHintsOn] = useState(false);
   const [isTouch, setIsTouch] = useState(false); // coarse pointer → touch model & always-reachable controls
   const [showOnboard, setShowOnboard] = useState(false); // first-visit gesture primer, fades after a beat
+  // English-primary by default; flips to Chinese-primary when the browser/device
+  // prefers a Chinese locale. The bilingual UI shows both either way.
+  const [zhFirst, setZhFirst] = useState(false);
 
   // Coarse pointer (phone / tablet): no hover to summon the control bar back, so
   // keep it reachable; and swap the keyboard hints for gesture hints. ?touch forces
@@ -403,6 +455,15 @@ export default function GalleryPage() {
     apply();
     mq.addEventListener?.("change", apply);
     return () => mq.removeEventListener?.("change", apply);
+  }, []);
+
+  // Prefer the visitor's own language for the bilingual copy. ?lang=zh|en forces it.
+  useEffect(() => {
+    const forced = new URLSearchParams(window.location.search).get("lang");
+    if (forced === "zh") { setZhFirst(true); return; }
+    if (forced === "en") { setZhFirst(false); return; }
+    const langs = navigator.languages?.length ? navigator.languages : [navigator.language];
+    setZhFirst(langs.some((l) => /^zh/i.test(l)));
   }, []);
 
   // Inspect-mode vignette — ellipse on a landscape screen, circle on portrait
@@ -766,6 +827,7 @@ export default function GalleryPage() {
           onToggleMusic={handleToggleMusic}
           musicAvailable={!!exhibition?.backgroundMusicUrl}
           isTouch={isTouch}
+          isLandscape={!vigPortrait}
         />
       )}
 
@@ -804,20 +866,30 @@ export default function GalleryPage() {
           display: "flex", flexDirection: "column", alignItems: "center", gap: 8, pointerEvents: "none",
           opacity: showOnboard ? 1 : 0, transition: "opacity 1.1s ease",
         }}>
-          <span style={{
-            fontFamily: "'Cormorant Garamond', serif", fontSize: "clamp(17px, 4.4vw, 22px)", fontStyle: "italic",
-            letterSpacing: "0.05em", color: "#c9a84c", textAlign: "center",
-            textShadow: "0 1px 3px rgba(0,0,0,0.95), 0 0 16px rgba(0,0,0,0.75)",
-          }}>
-            {isTouch ? "左右滑动漫步 · 轻触画作贴近看" : "拖动浏览 · 点击细看 · 滚轮靠近"}
-          </span>
-          <span style={{
-            fontFamily: "'Cormorant Garamond', serif", fontSize: 12.5, letterSpacing: "0.12em",
-            color: "rgba(201,168,76,0.62)", textTransform: "uppercase",
-            textShadow: "0 1px 3px rgba(0,0,0,0.9)",
-          }}>
-            {isTouch ? "drag · tap · pinch" : "drag · click · scroll"}
-          </span>
+          {(() => {
+            const en = isTouch ? "Swipe to explore · Tap a painting to look closely" : "Drag to explore · Click to look closely · Scroll to approach";
+            const zh = isTouch ? "左右滑动漫步 · 轻触画作贴近看" : "拖动浏览 · 点击细看 · 滚轮靠近";
+            const primary = zhFirst ? zh : en;
+            const secondary = zhFirst ? en : zh;
+            return (
+              <>
+                <span style={{
+                  fontFamily: "'Cormorant Garamond', serif", fontSize: "clamp(17px, 4.4vw, 22px)", fontStyle: "italic",
+                  letterSpacing: "0.04em", color: "#c9a84c", textAlign: "center",
+                  textShadow: "0 1px 3px rgba(0,0,0,0.95), 0 0 16px rgba(0,0,0,0.75)",
+                }}>
+                  {primary}
+                </span>
+                <span style={{
+                  fontFamily: "'Cormorant Garamond', serif", fontSize: 13, letterSpacing: "0.04em",
+                  color: "rgba(201,168,76,0.6)", textAlign: "center",
+                  textShadow: "0 1px 3px rgba(0,0,0,0.9)",
+                }}>
+                  {secondary}
+                </span>
+              </>
+            );
+          })()}
         </div>
       )}
 
@@ -828,6 +900,7 @@ export default function GalleryPage() {
           dims={paintingDimsRef.current[inspectedIndex] ?? { pw: 1, ph: 1, frameWidth: 0.09 }}
           viewRef={viewRef}
           isTouch={isTouch}
+          api={inspectApi}
         />
       )}
 

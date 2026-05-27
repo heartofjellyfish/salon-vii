@@ -16,6 +16,7 @@ export interface InspectApi {
   setZoomDir: (dir: -1 | 0 | 1) => void; // hold-to-zoom: +1 in, -1 out (past fit = exit), 0 stop
   exit: () => void;
   inspectIndex: (artworkIndex: number) => void; // tap a painting → walk to it and look closely
+  setView: (cx: number, cy: number) => void; // minimap drag → centre the view on framed coords (0..1)
 }
 
 // Which control set the keys currently drive, so the UI can flash the right hint
@@ -108,11 +109,21 @@ const SURFACE_RATIO = 0.6;
 // at every zoom. Eased for a soft start/stop.
 const PAN_SPEED = 0.95;
 
-// Mouse wheel / trackpad. In the room each accumulated notch dollies one stop and
-// the closest notch crosses into inspect; in inspect the wheel glides the same
-// continuous zoom as +/-. Scroll up (deltaY < 0) = move closer / zoom in.
-const WHEEL_ZOOM_K = 0.0016; // ratio multiplier per wheel-delta unit
-const ROOM_WHEEL_STEP = 110; // accumulated wheel delta that advances one dolly stop
+// Mouse wheel / trackpad. In the room the wheel glides the continuous roam depth
+// (and crosses into inspect at the closest point); in inspect the wheel glides the
+// same continuous zoom as +/-. Scroll up (deltaY < 0) = move closer / zoom in.
+const WHEEL_ZOOM_K = 0.0016; // inspect: ratio multiplier per wheel-delta unit
+const WHEEL_ROAM_K = 0.0019; // roam: roamFactor multiplier per wheel-delta unit
+
+// Room drag = paging, the way iOS swipes between photos. The view tracks the
+// finger with a little resistance (DRAG_SENS, < 1:1), and on release a swipe of
+// at least SWIPE_MIN px OR a flick faster than FLICK_MIN (px/ms) advances exactly
+// one painting; anything less settles back to where you were.
+const DRAG_SENS = 0.012; // metres of path per screen pixel while dragging
+const SWIPE_MIN = 46; // px of net travel to page one painting
+const FLICK_MIN = 0.45; // px/ms release speed that pages even on a short throw
+const SETTLE_LAMBDA = 13; // damp rate the page glides home with (snappy but eased)
+const DOUBLE_TAP_MS = 300; // two taps within this (and close together) = double-tap
 
 // The camera opens the show pulled well back into the room, then dollies in to
 // the default standing distance as the black curtain brightens — a slow
@@ -243,7 +254,11 @@ function AnchorControls({
   const introDone = useRef(false); // latches once the opening dolly-in has landed
   const easeZoom = useRef(9); // softened on entering inspect for a felt "lean in"
   const inspecting = useRef(false);
-  const roomIdx = useRef(DEFAULT_ROOM_INDEX); // index into ROOM_OUT
+  const roomIdx = useRef(DEFAULT_ROOM_INDEX); // nearest discrete stop (keyboard ↑/↓)
+  // Continuous roam depth as a multiple of the room base — wheel / pinch glide this
+  // smoothly between the closest stop (ROOM_OUT[0]) and the overview (last stop);
+  // the keyboard snaps it to the discrete ROOM_OUT stops.
+  const roamFactor = useRef(ROOM_OUT[DEFAULT_ROOM_INDEX]);
   // Continuous inspect zoom: current ratio of the bare-frame fit (1.0 = frame
   // fills), glided while +/- is held; zoomDir is -1 (out) / 0 / +1 (in).
   const inspectRatio = useRef(1);
@@ -277,8 +292,6 @@ function AnchorControls({
   const panMpp = useRef(0.01);
   const maxXRef = useRef(0);
   const maxYRef = useRef(0);
-  // Wheel/trackpad delta accumulated since the last room dolly step.
-  const wheelAccum = useRef(0);
 
   const sizeRef = useRef(size);
   sizeRef.current = size;
@@ -318,6 +331,19 @@ function AnchorControls({
       fitFor(dims.pw / 2 + dims.frameWidth, dims.ph / 2 + dims.frameWidth + NAMEPLATE_DROP, aspect),
       framedFit(dims, aspect) * MIN_ROOM_RATIO
     );
+  // At (or essentially at) the closest roam depth — the point a further step in
+  // crosses into inspect. Continuous (wheel/pinch) and discrete (keyboard) agree.
+  const atClosest = () => roamFactor.current <= ROOM_OUT[ROOM_CLOSEST_INDEX] + 1e-3;
+  // Discrete stop nearest a continuous roam factor, so the keyboard stays in sync
+  // after a wheel / pinch dolly.
+  const nearestRoomStop = (f: number) => {
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < ROOM_OUT.length; i++) {
+      const d = Math.abs(ROOM_OUT[i] - f);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  };
 
   const enterInspect = () => {
     if (inspecting.current) return;
@@ -339,6 +365,7 @@ function AnchorControls({
     pressDir.current = 0;
     swallowUp.current = false;
     roomIdx.current = ROOM_CLOSEST_INDEX; // land at the room-closest stop = just-fits, zoomed out one notch
+    roamFactor.current = ROOM_OUT[ROOM_CLOSEST_INDEX];
     panXTarget.current = panYTarget.current = 0;
     heldKeys.current.clear();
     easeZoom.current = 9;
@@ -377,7 +404,7 @@ function AnchorControls({
     }
     // begin a press
     justEntered.current = false;
-    if (dir === 1 && !inspecting.current && roomIdx.current === ROOM_CLOSEST_INDEX) {
+    if (dir === 1 && !inspecting.current && atClosest()) {
       enterInspect();
       justEntered.current = true; // this press only opens inspect — don't also notch
     }
@@ -389,10 +416,22 @@ function AnchorControls({
     zoomDir.current = dir; // glide immediately; a fast release snaps to a notch
   };
 
+  // Drag the minimap to recentre the view: framed-normalised (cx,cy) → pan target,
+  // clamped to the same edges the keyboard / drag honour.
+  const setView = (cx: number, cy: number) => {
+    if (!inspecting.current) return;
+    const dims = currentDims();
+    const framedW = dims.pw + 2 * dims.frameWidth;
+    const framedH = dims.ph + 2 * dims.frameWidth;
+    panXTarget.current = THREE.MathUtils.clamp((cx - 0.5) * framedW, -maxXRef.current, maxXRef.current);
+    panYTarget.current = THREE.MathUtils.clamp((0.5 - cy) * framedH, -maxYRef.current, maxYRef.current);
+    heldKeys.current.clear();
+  };
+
   // Expose zoom/exit so the DOM zoom buttons can drive the 3D camera.
   useEffect(() => {
     if (!inspectApi) return;
-    inspectApi.current = { setZoomDir, exit: exitInspect, inspectIndex };
+    inspectApi.current = { setZoomDir, exit: exitInspect, inspectIndex, setView };
     return () => {
       inspectApi.current = null;
     };
@@ -417,12 +456,17 @@ function AnchorControls({
     el.style.touchAction = "none";
 
     const pointers = new Map<number, { x: number; y: number }>();
-    let gesture: "none" | "drag" | "pan" | "pinch" = "none";
+    let gesture: "none" | "drag" | "pan" | "pinch" | "roompinch" = "none";
     let dragId = -1; // the one pointer that owns a room drag (ignore a stray 2nd finger)
     let startY = 0; // finger origin, for pull-down-to-exit at the whole frame
     let panFromX = 0, panFromY = 0; // finger origin of the active pan
     let panBaseX = 0, panBaseY = 0; // pan target when this pan began
     let pinchFromDist = 0, pinchFromRatio = 1;
+    let roomPinchFromDist = 0, roomPinchFromFactor = 1; // roam two-finger dolly
+    // Drag-as-paging bookkeeping.
+    let dragStartX = 0, dragStartIdx = 0, dragVel = 0, lastMoveT = 0;
+    // Double-tap (touch, inspect): toggle whole-frame ↔ surface.
+    let lastTapAt = 0, lastTapX = 0, lastTapY = 0;
 
     const live = () => [...pointers.values()];
     const spread = () => { const p = live(); return Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); };
@@ -432,32 +476,65 @@ function AnchorControls({
       panBaseX = panXTarget.current; panBaseY = panYTarget.current;
       heldKeys.current.clear();
     };
+    const beginDrag = (x: number, pid: number) => {
+      gesture = "drag";
+      dragId = pid;
+      dragging.current = true;
+      lastX.current = x;
+      dragStartX = x;
+      dragStartIdx = nearestAnchorIndex();
+      dragVel = 0;
+      lastMoveT = performance.now();
+    };
 
     const onDown = (e: PointerEvent) => {
       if (!active) return;
-      // Inspect-mode pan/pinch are touch (or pen) gestures only — a desktop mouse
-      // in "look closely" keeps its original behaviour untouched (arrows pan,
-      // click → lightbox). The room drag stays available to mouse and finger alike.
+      // Inspect-mode pan/pinch/double-tap are touch (or pen) gestures only — a
+      // desktop mouse in "look closely" keeps arrows/click; the room drag is for
+      // mouse and finger alike.
       const touchy = e.pointerType !== "mouse";
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pointers.size === 1) {
         startY = e.clientY;
         if (inspecting.current) {
-          if (touchy) beginPan(e.clientX, e.clientY);
+          if (touchy) {
+            const now = performance.now();
+            if (now - lastTapAt < DOUBLE_TAP_MS && Math.hypot(e.clientX - lastTapX, e.clientY - lastTapY) < 32) {
+              // Double-tap: whole frame → lean onto the surface; zoomed → back out
+              // to the whole frame (recentred). Eased by the dolly damp.
+              if (inspectRatio.current > 0.92) {
+                inspectRatio.current = Math.max(SURFACE_RATIO, minRatio.current);
+              } else {
+                inspectRatio.current = 1;
+                panXTarget.current = panYTarget.current = 0;
+              }
+              lastTapAt = 0;
+              gesture = "none";
+              return;
+            }
+            lastTapAt = now; lastTapX = e.clientX; lastTapY = e.clientY;
+            beginPan(e.clientX, e.clientY);
+          }
         } else {
-          gesture = "drag";
-          dragId = e.pointerId;
-          dragging.current = true;
-          lastX.current = e.clientX;
+          beginDrag(e.clientX, e.pointerId);
           el.style.cursor = "grabbing";
         }
-      } else if (pointers.size === 2 && inspecting.current && touchy) {
-        gesture = "pinch";
-        dragging.current = false;
-        pinchFromDist = spread() || 1;
-        pinchFromRatio = inspectRatio.current;
-        zoomDir.current = 0;
-        pressDir.current = 0;
+      } else if (pointers.size === 2 && touchy) {
+        if (inspecting.current) {
+          gesture = "pinch";
+          dragging.current = false;
+          pinchFromDist = spread() || 1;
+          pinchFromRatio = inspectRatio.current;
+          zoomDir.current = 0;
+          pressDir.current = 0;
+        } else {
+          // Roam: two fingers dolly toward / away from the wall (pinch out = walk
+          // closer); pinching past the closest stop crosses into "look closely".
+          gesture = "roompinch";
+          dragging.current = false;
+          roomPinchFromDist = spread() || 1;
+          roomPinchFromFactor = roamFactor.current;
+        }
       }
     };
 
@@ -466,11 +543,15 @@ function AnchorControls({
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (gesture === "drag") {
         if (!dragging.current || e.pointerId !== dragId) return;
+        const now = performance.now();
+        const dt = now - lastMoveT;
         const dx = e.clientX - lastX.current;
+        if (dt > 0) dragVel = dx / dt; // px/ms, sign = drag direction
+        lastMoveT = now;
         lastX.current = e.clientX;
-        // Grab-the-room (iPhone-natural): the wall tracks the finger, so dragging
-        // right pulls the painting on your left into view (camera moves the other way).
-        u.current = THREE.MathUtils.clamp(u.current - dx * 0.018, 0, total);
+        // Grab-the-room (iPhone-natural) with a little resistance: the wall tracks
+        // the finger, so dragging right brings the painting on your left toward you.
+        u.current = THREE.MathUtils.clamp(u.current - dx * DRAG_SENS, 0, total);
         targetU.current = u.current;
       } else if (gesture === "pan") {
         const mpp = panMpp.current;
@@ -488,12 +569,22 @@ function AnchorControls({
         }
       } else if (gesture === "pinch" && pointers.size >= 2) {
         const raw = pinchFromRatio * (pinchFromDist / (spread() || 1)); // fingers apart → zoom in
-        if (raw > 1.12 && pinchFromRatio >= 0.98) {
-          exitInspect(); // a hard pinch-in at the whole frame closes "look closely"
+        if (raw >= 1.05) {
+          exitInspect(); // keep pinching out past the whole frame → leave "look closely"
           pointers.clear();
           gesture = "none";
         } else {
           inspectRatio.current = THREE.MathUtils.clamp(raw, minRatio.current, 1);
+        }
+      } else if (gesture === "roompinch" && pointers.size >= 2) {
+        const f = roomPinchFromFactor * (roomPinchFromDist / (spread() || 1)); // apart → smaller → closer
+        if (f <= ROOM_OUT[ROOM_CLOSEST_INDEX] - 0.04) {
+          enterInspect(); // pinched in past the closest stop → cross into inspect
+          pointers.clear();
+          gesture = "none";
+        } else {
+          roamFactor.current = THREE.MathUtils.clamp(f, ROOM_OUT[ROOM_CLOSEST_INDEX], ROOM_OUT[ROOM_OUT.length - 1]);
+          roomIdx.current = nearestRoomStop(roamFactor.current);
         }
       }
     };
@@ -504,43 +595,57 @@ function AnchorControls({
       if (gesture === "drag") {
         dragging.current = false;
         el.style.cursor = active ? "grab" : "default";
-        easeLambda.current = 11; // crisp settle on release
-        targetU.current = U[nearestAnchorIndex()];
+        // Page like iOS: a swipe past SWIPE_MIN, or a quick flick, advances exactly
+        // one painting in the drag direction (drag left → next, right → previous);
+        // otherwise settle back. Then glide home, snappy but eased.
+        const net = lastX.current - dragStartX;
+        let step = 0;
+        if (net <= -SWIPE_MIN || dragVel <= -FLICK_MIN) step = 1;
+        else if (net >= SWIPE_MIN || dragVel >= FLICK_MIN) step = -1;
+        const target = THREE.MathUtils.clamp(dragStartIdx + step, 0, U.length - 1);
+        targetU.current = U[target];
+        easeLambda.current = SETTLE_LAMBDA;
         gesture = "none";
-      } else if (gesture === "pinch") {
-        // Two → one finger continues as a pan with the survivor.
-        if (pointers.size === 1) beginPan(live()[0].x, live()[0].y);
-        else gesture = "none";
+      } else if (gesture === "pinch" || gesture === "roompinch") {
+        // Two → one finger continues as the one-finger gesture for that mode.
+        if (pointers.size === 1) {
+          if (inspecting.current) beginPan(live()[0].x, live()[0].y);
+          else beginDrag(live()[0].x, [...pointers.keys()][0]);
+        } else gesture = "none";
       } else if (gesture === "pan") {
         if (pointers.size >= 1) beginPan(live()[0].x, live()[0].y);
         else gesture = "none";
       }
     };
 
-    // Mouse wheel / trackpad pinch. In the room it dollies through the stops (and
-    // crosses into inspect at the closest); in "look closely" it glides the same
-    // continuous zoom as +/-. preventDefault so the page never scrolls or zooms.
+    // Mouse wheel / trackpad. Roam: glide the continuous room depth (and cross into
+    // inspect scrolling in past the closest point). Inspect: a plain two-finger
+    // scroll pans the magnifier; a pinch (ctrl+wheel) glides the zoom. preventDefault
+    // so the page never scrolls or zooms behind the canvas.
     const onWheel = (e: WheelEvent) => {
       if (!active) return;
       e.preventDefault();
       if (inspecting.current) {
-        zoomDir.current = 0; // a wheel notch overrides any held-key glide
-        pressDir.current = 0;
-        const next = inspectRatio.current * Math.exp(e.deltaY * WHEEL_ZOOM_K);
-        if (next >= 1) exitInspect(); // scrolled back out past the whole frame
-        else inspectRatio.current = THREE.MathUtils.clamp(next, minRatio.current, 1);
+        if (e.ctrlKey) {
+          zoomDir.current = 0; // pinch overrides any held-key glide
+          pressDir.current = 0;
+          const next = inspectRatio.current * Math.exp(e.deltaY * WHEEL_ZOOM_K * 4); // pinch deltas are small
+          if (next >= 1) exitInspect();
+          else inspectRatio.current = THREE.MathUtils.clamp(next, minRatio.current, 1);
+        } else {
+          const mpp = panMpp.current;
+          panXTarget.current = THREE.MathUtils.clamp(panXTarget.current + e.deltaX * mpp, -maxXRef.current, maxXRef.current);
+          panYTarget.current = THREE.MathUtils.clamp(panYTarget.current - e.deltaY * mpp, -maxYRef.current, maxYRef.current);
+        }
         return;
       }
-      wheelAccum.current += e.deltaY;
-      while (wheelAccum.current <= -ROOM_WHEEL_STEP) {
-        wheelAccum.current += ROOM_WHEEL_STEP;
-        if (roomIdx.current === ROOM_CLOSEST_INDEX) { enterInspect(); wheelAccum.current = 0; break; }
-        roomIdx.current -= 1; // scroll up → step closer
+      const f = roamFactor.current * Math.exp(e.deltaY * WHEEL_ROAM_K);
+      if (e.deltaY < 0 && f <= ROOM_OUT[ROOM_CLOSEST_INDEX]) {
+        enterInspect(); // scrolled in past the closest point → look closely
+        return;
       }
-      while (wheelAccum.current >= ROOM_WHEEL_STEP) {
-        wheelAccum.current -= ROOM_WHEEL_STEP;
-        roomIdx.current = Math.min(roomIdx.current + 1, ROOM_OUT.length - 1); // scroll down → step back
-      }
+      roamFactor.current = THREE.MathUtils.clamp(f, ROOM_OUT[ROOM_CLOSEST_INDEX], ROOM_OUT[ROOM_OUT.length - 1]);
+      roomIdx.current = nearestRoomStop(roamFactor.current);
     };
 
     el.addEventListener("pointerdown", onDown);
@@ -574,13 +679,14 @@ function AnchorControls({
           // the room-overview distance — gliding back gently.
           targetU.current = U[start] ?? 0;
           roomIdx.current = DEFAULT_ROOM_INDEX;
+          roamFactor.current = ROOM_OUT[DEFAULT_ROOM_INDEX];
           easeLambda.current = 4.5;
         }
         e.preventDefault();
         return;
       }
       if (key === "+" || key === "=") {
-        if (inspecting.current || roomIdx.current === ROOM_CLOSEST_INDEX) {
+        if (inspecting.current || atClosest()) {
           setZoomDir(1); // held → continuous zoom-in (auto-repeat keydowns just re-arm)
           e.preventDefault();
         }
@@ -628,15 +734,19 @@ function AnchorControls({
         targetU.current = U[idx];
         e.preventDefault();
       } else if (key === "ArrowUp") {
-        if (roomIdx.current === ROOM_CLOSEST_INDEX) {
+        if (atClosest()) {
           enterInspect(); // at fit → cross into inspect
           swallowUp.current = true; // a ↑ held from the room stops at this first frame until released
         } else {
-          roomIdx.current -= 1; // dolly closer (auto-repeat = hold to glide in)
+          roomIdx.current = nearestRoomStop(roamFactor.current);
+          roomIdx.current = Math.max(ROOM_CLOSEST_INDEX, roomIdx.current - 1); // dolly closer one stop
+          roamFactor.current = ROOM_OUT[roomIdx.current];
         }
         e.preventDefault();
       } else if (key === "ArrowDown") {
+        roomIdx.current = nearestRoomStop(roamFactor.current);
         roomIdx.current = Math.min(roomIdx.current + 1, ROOM_OUT.length - 1);
+        roamFactor.current = ROOM_OUT[roomIdx.current];
         e.preventDefault();
       }
     };
@@ -712,7 +822,7 @@ function AnchorControls({
     // room base that frames frame + nameplate (room).
     const targetDepth = inspecting.current
       ? fit * inspectRatio.current
-      : roomBaseDepth(dims, aspect) * ROOM_OUT[roomIdx.current];
+      : roomBaseDepth(dims, aspect) * roamFactor.current;
     // Opening dolly-in: hold far behind the black curtain, then drift in slowly
     // (eyes-opening) to the room overview before normal responsive dollying.
     let aimDepth = targetDepth;

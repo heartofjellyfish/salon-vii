@@ -67,12 +67,13 @@ Key nuances (all in `AnchorControls`):
 
 | where | action |
 |---|---|
-| room (roam) | **drag** left/right to move between paintings — *grab-the-room* (iPhone-natural: the wall tracks the cursor, so dragging right brings the painting on your left into view). Disabled while inspecting. |
-| room (roam) | **scroll wheel / trackpad** to dolly through the room stops; scrolling in at the closest stop crosses into inspect |
-| inspect | **scroll wheel / trackpad** glides the continuous zoom (scroll up = in); scrolling back out past the whole frame exits |
+| room (roam) | **drag** to page between paintings — *grab-the-room* (iPhone-natural) with **paging**: a swipe past ~46 px or a quick flick advances exactly one painting, then glides home; a short drag settles back. Disabled while inspecting. |
+| room (roam) | **scroll wheel / trackpad** glides the **continuous** room depth (closer / back); scrolling in past the closest point crosses into inspect |
+| inspect | **two-finger scroll / trackpad** pans the magnifier; a **pinch** (ctrl+wheel) glides the continuous zoom; scrolling/pinching back out past the whole frame exits |
 | any painting | **click** → opens a full-screen 2D **lightbox** (desktop / guided; on **touch** a tap *looks closely* instead — see Touch) |
 | lightbox | click the backdrop or the **×** to close |
-| control panel (bottom) | **hold** `−` / `+` to zoom (tap = notch); click **▦** to toggle the thumbnail, **♪** to toggle ambient music |
+| minimap | **drag** the locator thumbnail to fly the view across the work (mouse or touch) |
+| control panel (bottom) | **hold** `−` / `+` to zoom (tap = notch); the locator button toggles the thumbnail, **♪** toggles ambient music |
 | bottom-right | **mode toggle** button (Free ↔ Guided) |
 | guided mode | prev / next buttons + progress dots (bottom-centre) |
 
@@ -114,12 +115,14 @@ desktop — room → look closely → pan/zoom → exit — expressed with nativ
 
 | where | gesture | action |
 |---|---|---|
-| room | one-finger horizontal drag | walk between paintings |
+| room | one-finger drag | **page** between paintings — one swipe/flick = one painting (iOS-style), then glides home |
+| room | **two-finger pinch** | dolly toward / away from the wall (pinch out = walk closer); pinch in past the closest stop crosses into inspect |
 | room | **tap a painting** | walk to it and look closely (no flat lightbox on touch) |
 | inspect | one-finger drag | pan the magnifier across the surface |
+| inspect | **double-tap** | toggle zoom — whole frame ⇄ painting surface (recentres on the way out) |
 | inspect | **two-finger pinch** | zoom in / out (clamped to the 1:1 crisp limit) |
-| inspect | **swipe down** or a hard pinch-in | exit back to the room |
-| controls | `−` `+` `▦` `♪` `×` buttons | zoom, thumbnail, music, exit — larger tap targets |
+| inspect | **swipe down** (at the whole frame), keep **pinching out**, or the **×** button | exit back to the room |
+| controls | `−` `+` locator `♪` `×` buttons | zoom, thumbnail, music, exit — larger tap targets; `×` shows while inspecting |
 
 - Inspect pan/pinch are gated to **touch + pen**, so a desktop mouse is unaffected.
 - The control bar **stays up** on touch (no hover to summon it back), sat a row
@@ -132,11 +135,10 @@ desktop — room → look closely → pan/zoom → exit — expressed with nativ
   deepest-zoom 1:1 clamp mean a phone pinch only zooms as far as stays crisp.
 
 ### Touch ideas not yet done (open for the controls session)
-- **Double-tap** to zoom in one step (Photos/Maps convention).
-- **Swipe left/right** to jump straight to the adjacent painting (today it's a
-  one-finger drag-walk).
-- Momentum / rubber-band polish on the pinch and swipe.
+- Momentum / rubber-band polish on the paging, pinch and swipe.
 - iPad-specific affordances (more screen, Pencil) vs the small iPhone layout.
+- A **description / 说明 mode** (black backdrop, work above, text below) from the
+  nameplate — see the click-routing rework.
 
 ---
 
@@ -144,15 +146,17 @@ desktop — room → look closely → pan/zoom → exit — expressed with nativ
 
 - **`src/components/gallery/GalleryScene.tsx` → `AnchorControls`** — the camera
   controller. Keyboard handler (`onKey` / `onKeyUp` / `onBlur`), the pointer/touch
-  **gesture** handler (one-finger drag-walk / pan, two-finger pinch, swipe-down or
-  pinch-in to exit — a `gesture` state machine), and the `useFrame` that integrates
+  **gesture** handler (drag-paging, one-finger pan, two-finger pinch [inspect zoom
+  *and* roam dolly], double-tap, swipe-down / pinch-out to exit — a `gesture` state
+  machine incl. `roompinch`), the `wheel` handler (continuous roam dolly; inspect:
+  two-finger scroll pans, ctrl+wheel pinch-zooms), and the `useFrame` that integrates
   dolly / pan / continuous zoom and reports the **phase** via `onPhaseChange`.
-  Exposes `inspectApi = { setZoomDir, exit, inspectIndex }`. Tunables (module consts): `VIEW_DIST`, `ROOM_OUT`, `FIT_MARGIN`,
+  Exposes `inspectApi = { setZoomDir, exit, inspectIndex, setView }` (`setView` drives
+  the draggable minimap). Tunables (module consts): `VIEW_DIST`, `ROOM_OUT`, `FIT_MARGIN`,
   `DEEPEST_RATIO`, `ZOOM_RATE`, `TAP_MS`, `NOTCH`, `SURFACE_RATIO`, `WHEEL_ZOOM_K`,
-  `ROOM_WHEEL_STEP`. The same effect also holds the `wheel` handler (dolly in the
-  room / glide zoom in inspect). Refs that hold
-  the interaction state: `inspectRatio`, `zoomDir`, `pressDir`, `swallowUp`,
-  `minRatio`, `roomIdx`, `heldKeys`.
+  `WHEEL_ROAM_K`, `DRAG_SENS`, `SWIPE_MIN`, `FLICK_MIN`, `SETTLE_LAMBDA`,
+  `DOUBLE_TAP_MS`. Refs that hold the interaction state: `inspectRatio`, `zoomDir`,
+  `pressDir`, `swallowUp`, `minRatio`, `roomIdx`, `roamFactor`, `heldKeys`.
 - **`src/app/gallery/page.tsx`** — all the DOM UI and state: `ControlBar` +
   `CONTROL_HINTS` (desktop key pills) + `TOUCH_HINTS` (gesture text), the
   `controlPhase` / `hintsOn` / `nearBottom` / `showMinimap` / `isTouch` / `musicOn`
