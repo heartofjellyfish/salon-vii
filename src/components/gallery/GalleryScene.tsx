@@ -5,6 +5,7 @@ import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { PerspectiveCamera } from "@react-three/drei";
 import * as THREE from "three";
 import Room from "./Room";
+import DuskLight from "./DuskLight";
 import Bench from "./Bench";
 import Carpet from "./Carpet";
 import Painting from "./Painting";
@@ -973,7 +974,8 @@ function SceneContent({
           picture-light. Nothing renders until all of it resolves, so it appears
           in a single frame rather than popping in piece by piece. */}
       <Suspense fallback={null}>
-        <Room />
+        <Room paused={!!inspecting} />
+        <DuskLight />
         <Carpet position={[0, 0, -2]} />
         <Bench position={[0, 0, -2]} />
         {artworks.map((artwork, index) => (

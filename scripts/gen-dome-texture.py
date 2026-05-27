@@ -45,48 +45,47 @@ def smoothstep(e0, e1, x):
 ys, xs = np.mgrid[0:S, 0:S]
 dx = (xs - C) / C
 dy = (ys - C) / C
-rn = np.sqrt(dx ** 2 + dy ** 2)          # 0 centre, 1 edge-midpoint, 1.41 corner
-ang = np.arctan2(dy, dx)
 
-# --- base sky: indigo zenith -> warm-dark plum at the rim --------------------
-zenith = np.array([0.045, 0.055, 0.155])
-midd = np.array([0.085, 0.085, 0.200])
-rimc = np.array([0.190, 0.115, 0.120])
-ta = smoothstep(0.0, 0.55, rn)
-tb = smoothstep(0.45, 1.0, rn)
-sky = (zenith[None, None] * (1 - ta)[..., None]
-       + midd[None, None] * (ta * (1 - tb))[..., None]
-       + rimc[None, None] * tb[..., None])
+# An off-centre warm glow — a low "sunrise/moon" lighting one quarter of the sky.
+# Clouds gather around it; the rest of the sky stays clear and starry. This reads
+# naturally across a whole flat ceiling (no clouds ringing the cornice).
+gx, gy = -0.40, 0.42
+gd = np.sqrt((dx - gx) ** 2 + (dy - gy) ** 2)
+glow = np.exp(-(gd ** 2) * 1.3)            # 0..1 warm influence
 
-# dusk side: clouds warmest toward one direction (the near/front edge)
-warm_dir = 0.5 + 0.5 * np.cos(ang + (np.pi / 2))   # peak toward -dy (front)
-warm = np.clip(0.5 + 0.9 * warm_dir, 0.25, 1.3)
+# --- base night sky: deep plum/violet (harmonises with the magenta walls and
+# gold trim — not a cold blue), faintly warmed toward the glow ----------------
+night = np.array([0.12, 0.06, 0.135])
+warmnight = np.array([0.19, 0.10, 0.13])
+var = fbm([2, 4], [1.0, 0.5])              # gentle large-scale tonal variation
+sky = (night[None, None] * (1 - (glow * 0.55)[..., None])
+       + warmnight[None, None] * (glow * 0.55)[..., None])
+sky = sky * (0.85 + 0.32 * var[..., None])
 
-# --- cloud masses, swelling toward the rim -----------------------------------
-clouds = fbm([3, 6, 12, 24], [1.0, 0.6, 0.32, 0.16])
-detail = fbm([16, 34, 64], [1.0, 0.5, 0.25])
-clouds = np.clip(clouds * 0.8 + detail * 0.2, 0, 1)
-band = smoothstep(0.46, 1.06, rn)
-cloud_mask = np.clip((clouds - 0.40) / 0.60, 0, 1) ** 1.25 * band
-cloud_mask = np.clip(cloud_mask * (0.6 + 0.55 * warm_dir), 0, 1)
+# --- clouds: clustered billowing masses with clear starry gaps ---------------
+cluster = fbm([1.5, 3], [1.0, 0.55])       # where clouds gather (large scale)
+detail = fbm([6, 12, 24, 48], [1.0, 0.55, 0.3, 0.16])
+field = np.clip(detail * (0.4 + 0.9 * cluster), 0, 1)
+# concentrate cloud near the glow, sparse away — NOT a rim ring
+cloud_mask = np.clip(smoothstep(0.46, 0.72, field) * (0.22 + 0.95 * glow), 0, 1)
 
-crest = np.array([1.12, 0.82, 0.48])
-belly = np.array([0.40, 0.24, 0.18])
-lit = smoothstep(0.32, 0.88, clouds)[..., None]
-cloud_col = (belly[None, None] * (1 - lit) + crest[None, None] * lit) * warm[..., None]
+# golden where the glow lights them, dim warm-grey where far
+crest = np.array([1.08, 0.80, 0.46])
+dim = np.array([0.22, 0.18, 0.22])
+lit = np.clip(glow * 1.15, 0, 1)[..., None]
+shade = smoothstep(0.40, 0.85, field)[..., None]
+cloud_col = (dim[None, None] * (1 - lit) + crest[None, None] * lit) * (0.6 + 0.5 * shade)
 
 a = cloud_mask[..., None]
 img = sky * (1 - a) + cloud_col * a
 
-# brightest sunlit bank, on the near/front edge
-bx, by = 0.0, -0.6
-glow = np.exp(-(((dx - bx)) ** 2 + ((dy - by)) ** 2) * 3.0)
-img += np.array([0.62, 0.4, 0.2])[None, None] * (glow * 0.5)[..., None]
+# warm bloom at the glow source
+img += np.array([0.50, 0.34, 0.18])[None, None] * ((glow ** 1.4) * 0.5)[..., None]
 
-# NB: no stars baked in — the dome shader draws crisp, twinkling stars on top so
-# they stay sharp while this cloud layer is gently warped/animated underneath.
+# NB: no stars baked in — the ceiling shader draws crisp, twinkling stars on top
+# so they stay sharp while this cloud layer is gently warped/animated underneath.
 
 img = np.clip(img, 0, 1)
 out = (img ** (1 / 1.06) * 255).astype(np.uint8)
 Image.fromarray(out).save("public/assets/gallery-ceiling/celestial_dome_clouds_2048.png")
-print("wrote celestial_dome_clouds_2048.png (square radial, clouds + sky, no stars)")
+print("wrote celestial_dome_clouds_2048.png (scattered clouds + off-centre glow)")

@@ -5,12 +5,25 @@ import { useTexture } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
-// ── Animated painted sky ─────────────────────────────────────────────────────
-// A self-contained dome shader: a deep indigo zenith easing into warm, sunset-lit
-// clouds at the rim, with the clouds drifting/billowing (domain-warped fBm over
-// time) and the stars twinkling on a grid that wheels slowly about the zenith.
-// Authored in sRGB and output raw (no tone-map / colour-space chunk) to match the
-// other unlit ceiling art.
+// A Baroque "celestial salon" ceiling. The gallery camera is locked to a level
+// sightline (the visitor never looks straight up), so the ceiling is only ever
+// seen as a glancing band along the top of the frame — which means the sky has
+// to be LARGE to be visible at all. So: a warm ivory ceiling with a big central
+// oval opening onto a gently domed, living painted sky (deep plum/violet night,
+// golden sunset clouds that billow, crisp twinkling stars), framed by an ornate
+// gilt ring. Photographic crown moulding + a faint warm cove finish the seam.
+//
+// The sky is a baked cloud roundel sampled through a slow evolving domain warp
+// (clouds churn in place) with crisp procedural stars on top, on a shallow sphere
+// cap with planar (top-down) UVs. Authored in sRGB and output raw so it reads as
+// luminous and unlit.
+//
+// NB: the room is NOT centred on the origin — floor/ceiling sit at z = centerZ.
+
+const CROWN_ASPECT = 2048 / 256; // 8:1
+const COVE_ASPECT = 2048 / 128; // 16:1
+const RING_INNER_FRAC = 0.84; // mean radius of the gold band in the ring decal
+
 const DOME_VERT = /* glsl */ `
   varying vec2 vUv;
   void main() {
@@ -36,20 +49,26 @@ const DOME_FRAG = /* glsl */ `
 
   void main(){
     vec2 c = vUv - 0.5;
-    float rn = length(c) * 2.0;     // 0 at zenith, 1 at the rim
-
-    // Gently billowing clouds: sample the baked cloud roundel through a slow,
-    // evolving domain warp so the (high-quality) clouds churn/morph in place.
+    float r = length(c);
     float t = uTime;
+
+    // Van Gogh "Starry Night" swirl: twist the sample space by a spiral angle
+    // that undulates with radius and time (rings of curl flowing outward), fading
+    // toward the edges so the centre eddies rather than the whole sky shearing.
+    float swirl = 0.95 * sin(r * 4.6 - t * 0.5) * smoothstep(0.74, 0.04, r);
+    vec2 suv = rot(swirl) * c + 0.5;
+
+    // billowing clouds on the swirled coords (clearly drifting/morphing)
     vec2 wv = vec2(
-      vnoise(vUv * 3.5 + vec2(t * 0.03, 0.0)),
-      vnoise(vUv * 3.5 + vec2(0.0, t * 0.027) + 5.3)
+      vnoise(suv * 3.5 + vec2(t * 0.10, 0.0)),
+      vnoise(suv * 3.5 + vec2(0.0, t * 0.088) + 5.3)
     ) - 0.5;
-    vec2 uvc = vUv + wv * 0.045;
+    vec2 uvc = suv + wv * 0.06;
     vec3 col = texture2D(uClouds, uvc).rgb;
 
-    // Crisp twinkling stars on a slowly wheeling grid, hidden behind bright cloud.
-    vec2 su = rot(uTime * 0.004) * c + 0.5;
+    // stars: a steady one-way wheel (no swirl term, so they don't rock back and
+    // forth — the swirl stays on the clouds only), with radiant pulsing halos
+    vec2 su = rot(t * 0.03) * c + 0.5;
     vec2 sg = su * 150.0;
     vec2 gi = floor(sg);
     float h = hash(gi);
@@ -57,36 +76,39 @@ const DOME_FRAG = /* glsl */ `
     if (h > 0.82) {
       vec2 cc = gi + 0.5 + 0.35 * vec2(hash(gi + 1.3) - 0.5, hash(gi + 2.7) - 0.5);
       float d = length(sg - cc);
-      float tw = 0.62 + 0.38 * sin(uTime * 2.2 + h * 60.0);
+      float tw = 0.6 + 0.4 * sin(t * 2.4 + h * 60.0);
       float br = (h - 0.82) / 0.18;
-      star = smoothstep(0.16, 0.0, d) * tw * br;
+      float core = smoothstep(0.14, 0.0, d);
+      float halo = smoothstep(0.52, 0.0, d) * 0.4;   // Van Gogh radiance
+      star = (core + halo) * tw * br;
     }
-    // Hide stars only behind the golden clouds (high red), not the blue sky, and
-    // keep them across the dome — fading only in the last sliver near the frame.
     float cloudAmt = smoothstep(0.30, 0.62, col.r);
-    float starVis = (1.0 - 0.9 * cloudAmt) * smoothstep(1.02, 0.82, rn);
-    col += vec3(1.0, 0.94, 0.76) * star * starVis * 1.6;
+    float starVis = 1.0 - 0.92 * cloudAmt;
+    col += vec3(1.0, 0.93, 0.74) * star * starVis * 1.7;
 
     gl_FragColor = vec4(col, 1.0);
   }
 `;
 
-function AnimatedDomeSky({
+// The painted sky on a shallow dome cap (viewer is below → BackSide).
+function AnimatedSky({
   geometry,
   position,
   clouds,
+  paused = false,
 }: {
   geometry: THREE.BufferGeometry;
   position: [number, number, number];
   clouds: THREE.Texture;
+  paused?: boolean;
 }) {
   const matRef = useRef<THREE.ShaderMaterial>(null);
-  const uniforms = useMemo(
-    () => ({ uTime: { value: 0 }, uClouds: { value: clouds } }),
-    [clouds]
-  );
+  const uniforms = useMemo(() => ({ uTime: { value: 0 }, uClouds: { value: clouds } }), [clouds]);
+  // Freeze the swirl while the visitor is up close inspecting a painting — the
+  // sky is off-screen then, so this spends the animation budget only on the
+  // first-impression room overview where it actually shows.
   useFrame((_, dt) => {
-    if (matRef.current) matRef.current.uniforms.uTime.value += Math.min(dt, 0.05);
+    if (!paused && matRef.current) matRef.current.uniforms.uTime.value += Math.min(dt, 0.05);
   });
   return (
     <mesh geometry={geometry} position={position}>
@@ -102,24 +124,6 @@ function AnimatedDomeSky({
   );
 }
 
-// A Baroque "celestial salon" ceiling: the flat ceiling becomes a dark plaster
-// field with a large central OVAL opening, ringed by a 3-D gilt frame, that opens
-// onto a gently domed painted sky — a deep starry zenith easing into warm,
-// sunset-lit clouds at the rim. A warm glow pools around the opening, photographic
-// crown moulding finishes the wall/ceiling seam, and a faint cove light spills
-// beneath it.
-//
-// The sky is a SQUARE radial painting mapped PLANAR (top-down) onto a shallow
-// sphere cap, so it reads like a painted roundel seen from below — no equirect
-// pole pinch, no deep-well distortion.
-//
-// NB: the gallery room is NOT centred on the origin — its floor/ceiling sit at
-// z = centerZ. Everything here is offset by centerZ to match.
-
-const RING_INNER_FRAC = 0.84; // mean radius of the gold band inside the decal
-const CROWN_ASPECT = 2048 / 256; // 8:1
-const COVE_ASPECT = 2048 / 128; // 16:1
-
 interface WallSpec {
   key: string;
   width: number;
@@ -133,22 +137,15 @@ export interface CelestialSalonCeilingProps {
   ceilingY: number;
   centerZ?: number;
   assetBasePath?: string;
-  /** Oval opening half-axis along the room width. */
+  /** Big oval opening half-axes (kept large so the sky is visible at eye level). */
   openingRadiusX?: number;
-  /** Oval opening half-axis along the room depth. */
   openingRadiusZ?: number;
-  /** How far the painted dome bulges above the ceiling (m). */
+  /** How far the domed sky bulges above the ceiling (m). */
   domeRise?: number;
-  /** Thickness of the gilt frame bead. */
-  frameTube?: number;
-  /** Visual height of the crown moulding band (m). */
   crownHeight?: number;
-  /** Opacity of the additive cove-light strip under the crown. */
   coveLightOpacity?: number;
-  /** Opacity of the warm radial glow around the oculus. */
-  glowOpacity?: number;
-  /** Decorative L-blocks tucked into the top corners (off by default). */
-  showCornerBlocks?: boolean;
+  /** Freeze the sky animation (e.g. while inspecting a painting). */
+  paused?: boolean;
 }
 
 export default function CelestialSalonCeiling({
@@ -157,63 +154,55 @@ export default function CelestialSalonCeiling({
   ceilingY,
   centerZ = 0,
   assetBasePath = "/assets/gallery-ceiling",
-  openingRadiusX = 4.7,
+  openingRadiusX = 4.85,
   openingRadiusZ = 3.15,
-  domeRise = 1.3,
-  frameTube = 0.17,
+  domeRise = 1.1,
   crownHeight = 0.42,
   coveLightOpacity = 0.35,
-  glowOpacity = 0.5,
-  showCornerBlocks = false,
+  paused = false,
 }: CelestialSalonCeilingProps) {
-  const [cloudsTex, ringTex, crownTex, coveTex, glowTex, cornerTex] = useTexture([
+  const [cloudsTex, ringTex, crownTex, coveTex] = useTexture([
     `${assetBasePath}/celestial_dome_clouds_2048.png`,
     `${assetBasePath}/aged_gold_dome_ring_alpha_2048.png`,
     `${assetBasePath}/old_salon_crown_molding_seamless_2048x256.png`,
     `${assetBasePath}/warm_cove_light_strip_alpha_2048x128.png`,
-    `${assetBasePath}/warm_top_glow_alpha_1024.png`,
-    `${assetBasePath}/old_salon_crown_corner_alpha_512.png`,
   ]);
 
   const halfW = roomWidth / 2;
   const halfD = roomDepth / 2;
   const backZ = centerZ - halfD;
   const frontZ = centerZ + halfD;
+  const Rx = openingRadiusX;
+  const Rz = openingRadiusZ;
+  const ratio = Rx / Rz;
+  const ovalScale: [number, number, number] = [ratio, 1, 1];
 
-  useMemo(() => {
-    for (const t of [ringTex, glowTex, cornerTex]) t.colorSpace = THREE.SRGBColorSpace;
-  }, [ringTex, glowTex, cornerTex]);
-
-  // Cloud roundel is sampled in a raw shader that outputs unmanaged colour, so
-  // keep it linear (no sRGB decode) — the authored sRGB texels pass through as-is.
   useMemo(() => {
     cloudsTex.colorSpace = THREE.LinearSRGBColorSpace;
     cloudsTex.wrapS = cloudsTex.wrapT = THREE.ClampToEdgeWrapping;
     cloudsTex.needsUpdate = true;
   }, [cloudsTex]);
+  useMemo(() => {
+    ringTex.colorSpace = THREE.SRGBColorSpace;
+  }, [ringTex]);
 
-  // --- shallow painted-sky cap -----------------------------------------------
-  // Circular cap that comfortably covers the oval opening; planar UVs map the
-  // square painting's inscribed disc onto it (centre → zenith, edge → rim).
-  const capBaseR = Math.max(openingRadiusX, openingRadiusZ) + 0.5;
+  // Shallow sky cap covering the oval; planar UVs map the square painting on.
+  const capBaseR = Rx + 0.35;
   const Rs = (capBaseR * capBaseR + domeRise * domeRise) / (2 * domeRise);
   const thetaLength = Math.acos((Rs - domeRise) / Rs);
   const sphereCenterY = ceilingY + domeRise - Rs;
-
   const domeGeo = useMemo(() => {
     const g = new THREE.SphereGeometry(Rs, 120, 80, 0, Math.PI * 2, 0, thetaLength);
     const pos = g.attributes.position;
     const uv = g.attributes.uv as THREE.BufferAttribute;
     for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const z = pos.getZ(i);
-      uv.setXY(i, 0.5 + x / (2 * capBaseR), 0.5 - z / (2 * capBaseR));
+      uv.setXY(i, 0.5 + pos.getX(i) / (2 * capBaseR), 0.5 - pos.getZ(i) / (2 * capBaseR));
     }
     uv.needsUpdate = true;
     return g;
   }, [Rs, thetaLength, capBaseR]);
 
-  // Dark plaster ceiling with the oval opening cut out of the centre.
+  // Warm ivory ceiling with the big oval opening.
   const ceilingGeo = useMemo(() => {
     const shape = new THREE.Shape();
     const ex = halfW + 0.1;
@@ -224,13 +213,11 @@ export default function CelestialSalonCeiling({
     shape.lineTo(-ex, ez);
     shape.lineTo(-ex, -ez);
     const hole = new THREE.Path();
-    hole.absellipse(0, 0, openingRadiusX, openingRadiusZ, 0, Math.PI * 2, false, 0);
+    hole.absellipse(0, 0, Rx, Rz, 0, Math.PI * 2, false, 0);
     shape.holes.push(hole);
     return new THREE.ShapeGeometry(shape, 96);
-  }, [halfW, halfD, openingRadiusX, openingRadiusZ]);
+  }, [halfW, halfD, Rx, Rz]);
 
-  // Per-wall moulding/cove clones so each wall tiles the strip at a constant
-  // physical size (texture.repeat is per-texture).
   const tiledStrip = (base: THREE.Texture, width: number, bandHeight: number, aspect: number) => {
     const t = base.clone();
     t.colorSpace = THREE.SRGBColorSpace;
@@ -251,9 +238,9 @@ export default function CelestialSalonCeiling({
     [roomWidth, roomDepth, halfW, backZ, frontZ, centerZ]
   );
 
-  const crownY = ceilingY - crownHeight / 2; // top edge meets the ceiling
+  const crownY = ceilingY - crownHeight / 2;
   const coveHeight = crownHeight * 0.38;
-  const coveY = crownY - crownHeight / 2 - coveHeight / 2; // just below the crown
+  const coveY = crownY - crownHeight / 2 - coveHeight / 2;
 
   const crownMats = useMemo(
     () =>
@@ -268,7 +255,6 @@ export default function CelestialSalonCeiling({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [walls, crownTex, crownHeight]
   );
-
   const coveMats = useMemo(
     () =>
       walls.map((w) =>
@@ -286,59 +272,28 @@ export default function CelestialSalonCeiling({
     [walls, coveTex, coveHeight, coveLightOpacity]
   );
 
-  // Gilt frame: a fat gold bead following the oval edge, plus the ornamental
-  // decal laid flat just behind it for the carved diamond detail.
-  const frameMajor = (openingRadiusX + openingRadiusZ) / 2;
-  const frameScale: [number, number, number] = [
-    openingRadiusX / frameMajor,
-    openingRadiusZ / frameMajor,
-    1,
-  ];
-  const decalW = (openingRadiusX / RING_INNER_FRAC) * 2;
-  const decalD = (openingRadiusZ / RING_INNER_FRAC) * 2;
-  const glowW = openingRadiusX * 2.3;
-  const glowD = openingRadiusZ * 2.6;
+  const decalW = (Rx / RING_INNER_FRAC) * 2;
+  const decalD = (Rz / RING_INNER_FRAC) * 2;
 
   return (
     <group>
-      {/* Plaster ceiling field with the oval opening — a warm deep plum so the
-          surround reads as a lit ceiling, not a black void. */}
+      {/* Domed living sky behind the oval (viewer below → BackSide) */}
+      <AnimatedSky geometry={domeGeo} position={[0, sphereCenterY, centerZ]} clouds={cloudsTex} paused={paused} />
+
+      {/* Warm ivory ceiling with the big oval opening */}
       <mesh geometry={ceilingGeo} position={[0, ceilingY, centerZ]} rotation={[Math.PI / 2, 0, 0]}>
-        <meshStandardMaterial color="#3e3038" emissive="#1a1012" emissiveIntensity={0.35} roughness={0.98} metalness={0} side={THREE.DoubleSide} />
+        <meshStandardMaterial color="#e0cfa6" emissive="#39301d" emissiveIntensity={0.32} roughness={0.9} metalness={0} side={THREE.DoubleSide} />
       </mesh>
 
-      {/* Animated painted sky on a shallow dome cap (viewer is below → BackSide) */}
-      <AnimatedDomeSky geometry={domeGeo} position={[0, sphereCenterY, centerZ]} clouds={cloudsTex} />
-
-      {/* Ornamental gold band, laid flat just behind the bead */}
+      {/* Ornate gilt ring framing the opening (painted texture — less "CG") */}
       <mesh position={[0, ceilingY - 0.01, centerZ]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={2}>
         <planeGeometry args={[decalW, decalD]} />
         <meshBasicMaterial map={ringTex} transparent depthWrite={false} side={THREE.DoubleSide} toneMapped={false} />
       </mesh>
-
-      {/* 3-D gilt bead following the oval edge */}
-      <mesh position={[0, ceilingY - 0.04, centerZ]} rotation={[Math.PI / 2, 0, 0]} scale={frameScale}>
-        <torusGeometry args={[frameMajor, frameTube, 28, 180]} />
-        <meshStandardMaterial color="#c79a4e" metalness={0.55} roughness={0.42} emissive="#3a2a0e" emissiveIntensity={0.5} />
-      </mesh>
-      {/* a slimmer inner bead for a stepped, carved profile */}
-      <mesh position={[0, ceilingY - 0.11, centerZ]} rotation={[Math.PI / 2, 0, 0]} scale={frameScale}>
-        <torusGeometry args={[frameMajor - 0.06, frameTube * 0.55, 24, 180]} />
-        <meshStandardMaterial color="#d8b566" metalness={0.6} roughness={0.38} emissive="#3a2a0e" emissiveIntensity={0.5} />
-      </mesh>
-
-      {/* Warm glow pooling around the opening */}
-      <mesh position={[0, ceilingY - 0.06, centerZ]} rotation={[-Math.PI / 2, 0, 0]} renderOrder={1}>
-        <planeGeometry args={[glowW, glowD]} />
-        <meshBasicMaterial
-          map={glowTex}
-          transparent
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          opacity={glowOpacity}
-          side={THREE.DoubleSide}
-          toneMapped={false}
-        />
+      {/* a slim lit gold bead at the very lip for a touch of real depth */}
+      <mesh position={[0, ceilingY - 0.03, centerZ]} rotation={[Math.PI / 2, 0, 0]} scale={ovalScale}>
+        <torusGeometry args={[Rz, 0.07, 22, 170]} />
+        <meshStandardMaterial color="#d6ad58" metalness={0.35} roughness={0.45} emissive="#4a3512" emissiveIntensity={0.7} />
       </mesh>
 
       {/* Photographic crown moulding, lifted slightly proud of each wall */}
@@ -358,7 +313,7 @@ export default function CelestialSalonCeiling({
         );
       })}
 
-      {/* Faint warm cove light spilling just under the crown */}
+      {/* Faint warm cove light just under the crown */}
       {walls.map((w, i) => {
         const inward = 0.1;
         const dx = Math.sin(w.rotationY) * inward;
@@ -376,29 +331,8 @@ export default function CelestialSalonCeiling({
         );
       })}
 
-      {/* Optional decorative corner blocks tucked into the top corners */}
-      {showCornerBlocks &&
-        ([
-          [-halfW, backZ, 0],
-          [halfW, backZ, Math.PI / 2],
-          [halfW, frontZ, Math.PI],
-          [-halfW, frontZ, -Math.PI / 2],
-        ] as const).map(([cx, cz, rot], i) => (
-          <mesh
-            key={`corner-${i}`}
-            position={[cx, ceilingY - 0.02, cz]}
-            rotation={[-Math.PI / 2, 0, rot]}
-            renderOrder={2}
-          >
-            <planeGeometry args={[0.7, 0.7]} />
-            <meshBasicMaterial map={cornerTex} transparent depthWrite={false} side={THREE.DoubleSide} toneMapped={false} />
-          </mesh>
-        ))}
-
-      {/* Warm keys grazing the gilt frame — a soft central wash plus a stronger
-          one on the dusk side so the gold reads gilded, not flat. */}
-      <pointLight color="#ffc987" intensity={0.8} distance={12} decay={2} position={[0, ceilingY - 0.5, centerZ]} />
-      <pointLight color="#ffb066" intensity={0.7} distance={7} decay={2} position={[0, ceilingY - 0.7, centerZ + openingRadiusZ * 0.7]} />
+      {/* Warm wash so the ivory surround reads as lit plaster, not a flat slab */}
+      <pointLight color="#ffd9a0" intensity={0.9} distance={10} decay={2} position={[0, ceilingY - 0.6, centerZ]} />
     </group>
   );
 }

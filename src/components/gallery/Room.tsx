@@ -30,7 +30,7 @@ function tiledClone(base: THREE.Texture, repeatX: number, repeatY: number) {
   return t;
 }
 
-export default function Room() {
+export default function Room({ paused = false }: { paused?: boolean }) {
   const wallpaper = useTexture("/textures/wallpaper.jpg");
   const wood = useTexture("/textures/floor-wood.jpg");
 
@@ -55,10 +55,10 @@ export default function Room() {
         <meshStandardMaterial map={floorTex} roughness={0.7} metalness={0} />
       </mesh>
 
-      {/* Celestial oculus ceiling: dark plaster border + star dome + gold ring +
-          warm glow + photographic crown moulding + cove light (replaces the old
-          flat ceiling and procedural cornice). */}
-      <CelestialSalonCeiling roomWidth={W} roomDepth={D} ceilingY={H} centerZ={ROOM_CENTER_Z} />
+      {/* Celestial oculus ceiling: warm ivory ceiling with a big oval opening onto
+          a living, swirling Van-Gogh sky, framed by a gilt ring; photographic
+          crown moulding + warm cove. Animation freezes while inspecting. */}
+      <CelestialSalonCeiling roomWidth={W} roomDepth={D} ceilingY={H} centerZ={ROOM_CENTER_Z} paused={paused} />
 
       {/* Back wall (north) */}
       <mesh position={[0, H / 2, BACK_Z]} receiveShadow>
