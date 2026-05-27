@@ -222,66 +222,64 @@ function ControlBar({
   show,
   inspecting,
   api,
-  onHover,
+  minimapOn,
+  onToggleMinimap,
 }: {
   phase: "roam" | "entry" | "cropped";
   show: boolean;
   inspecting: boolean;
   api: React.MutableRefObject<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void } | null>;
-  onHover: (h: boolean) => void;
+  minimapOn: boolean;
+  onToggleMinimap: () => void;
 }) {
   return (
-    <div style={{ position: "fixed", bottom: 24, left: 0, right: 0, zIndex: 210, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
-      {/* Stable hover zone — sized to the cluster (always in layout), so hovering
-          anywhere over it reliably reveals the controls and leaving hides them. */}
-      <div
-        onMouseEnter={() => onHover(true)}
-        onMouseLeave={() => onHover(false)}
-        style={{ position: "relative", display: "flex", justifyContent: "center", padding: "8px 0", pointerEvents: "auto" }}
-      >
-        {/* full cluster — visible while flashing or hovered */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 16,
-          opacity: show ? 1 : 0, transition: "opacity 0.4s ease",
-          pointerEvents: show ? "auto" : "none",
-        }}>
-          {CONTROL_HINTS[phase].map((item, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <div style={{ display: "flex", gap: 4 }}>
-                {item.keys.map((k) => <span key={k} style={HINT_PILL}>{k}</span>)}
-              </div>
-              <span style={HINT_LABEL}>{item.label}</span>
+    <div style={{
+      position: "fixed", bottom: 22, left: 0, right: 0, zIndex: 210,
+      display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+      opacity: show ? 1 : 0, transition: "opacity 0.45s ease", pointerEvents: "none",
+    }}>
+      {/* Contextual key hints — change per phase. They sit ABOVE the buttons so the
+          buttons never shift when the hints change. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        {CONTROL_HINTS[phase].map((item, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+            <div style={{ display: "flex", gap: 4 }}>
+              {item.keys.map((k) => <span key={k} style={HINT_PILL}>{k}</span>)}
             </div>
-          ))}
-          {inspecting && (
-            <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-              <div style={{ display: "flex", gap: 4 }}>
-                {([["−", -1], ["+", 1]] as const).map(([label, dir]) => (
-                  <button
-                    key={label}
-                    onPointerDown={(e) => { e.preventDefault(); api.current?.setZoomDir(dir); }}
-                    onPointerUp={() => api.current?.setZoomDir(0)}
-                    onPointerLeave={() => api.current?.setZoomDir(0)}
-                    onPointerCancel={() => api.current?.setZoomDir(0)}
-                    aria-label={dir === 1 ? "zoom in" : "zoom out"}
-                    style={ZOOM_BTN}
-                  >{label}</button>
-                ))}
-              </div>
-              <span style={HINT_LABEL}>缩放</span>
-            </div>
-          )}
-        </div>
-        {/* collapsed handle — a faint cue showing where to hover once it recedes */}
-        <div style={{
-          position: "absolute", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
-          opacity: show ? 0 : 0.5, transition: "opacity 0.4s ease", pointerEvents: "none",
-          padding: "3px 16px", borderRadius: 10,
-          border: "1px solid rgba(201,168,76,0.3)", background: "rgba(5,3,8,0.5)",
-          backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-          color: "rgba(201,168,76,0.85)", fontSize: 11, lineHeight: 1.2, letterSpacing: "0.05em",
-          textShadow: "0 1px 3px rgba(0,0,0,0.9)", whiteSpace: "nowrap",
-        }}>⌃ 操作</div>
+            <span style={HINT_LABEL}>{item.label}</span>
+          </div>
+        ))}
+      </div>
+      {/* Fixed control buttons — the SAME buttons in the SAME place every phase, so
+          muscle memory holds (zoom never jumps). Inactive controls dim in place
+          instead of disappearing. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, pointerEvents: show ? "auto" : "none" }}>
+        {([["−", -1], ["+", 1]] as const).map(([label, dir]) => (
+          <button
+            key={label}
+            disabled={!inspecting}
+            onPointerDown={(e) => { e.preventDefault(); api.current?.setZoomDir(dir); }}
+            onPointerUp={() => api.current?.setZoomDir(0)}
+            onPointerLeave={() => api.current?.setZoomDir(0)}
+            onPointerCancel={() => api.current?.setZoomDir(0)}
+            aria-label={dir === 1 ? "zoom in" : "zoom out"}
+            style={{ ...ZOOM_BTN, opacity: inspecting ? 1 : 0.3, cursor: inspecting ? "pointer" : "default" }}
+          >{label}</button>
+        ))}
+        <button
+          disabled={!inspecting}
+          onClick={onToggleMinimap}
+          aria-label="toggle thumbnail"
+          title="缩略图"
+          style={{
+            ...ZOOM_BTN, fontSize: 14,
+            opacity: inspecting ? 1 : 0.3, cursor: inspecting ? "pointer" : "default",
+            borderColor: minimapOn && inspecting ? "rgba(245,222,140,0.95)" : "rgba(201,168,76,0.4)",
+            background: minimapOn && inspecting ? "rgba(201,168,76,0.22)" : "rgba(5,3,8,0.6)",
+          }}
+        >▦</button>
+        {/* Fixed slot for more controls (music, curator note, …) — add them here so
+            existing buttons keep their positions. */}
       </div>
     </div>
   );
@@ -303,7 +301,8 @@ export default function GalleryPage() {
   const [inspecting, setInspecting] = useState(false);
   const [inspectedIndex, setInspectedIndex] = useState<number | null>(null);
   const [inspectCue, setInspectCue] = useState(false); // brief "look closely" prompt on entry
-  const [hovered, setHovered] = useState(false); // control bar hovered → keep it shown
+  const [nearBottom, setNearBottom] = useState(false); // mouse near the bottom → reveal controls
+  const [showMinimap, setShowMinimap] = useState(true); // thumbnail visible during inspect (toggle)
   const inspectApi = useRef<{ setZoomDir: (dir: -1 | 0 | 1) => void; exit: () => void } | null>(null);
   const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number; loadedW?: number; loadedH?: number } }>({});
   const viewRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
@@ -364,6 +363,15 @@ export default function GalleryPage() {
     const t = setTimeout(() => setHintsOn(false), 4200);
     return () => clearTimeout(t);
   }, [controlPhase, mode, ready]);
+
+  // Reveal the control panel when the mouse comes down to the bottom of the
+  // screen; otherwise it stays out of the way while you look at the work.
+  useEffect(() => {
+    if (mode !== "unguided") { setNearBottom(false); return; }
+    const onMove = (e: MouseEvent) => setNearBottom(e.clientY > window.innerHeight - 120);
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [mode]);
 
   // Load data — reuse what the entrance already fetched (sessionStorage) so the
   // gallery doesn't pay a second round trip behind the black screen.
@@ -591,10 +599,11 @@ export default function GalleryPage() {
       {mode === "unguided" && (
         <ControlBar
           phase={controlPhase}
-          show={hintsOn || hovered}
+          show={hintsOn || nearBottom}
           inspecting={inspecting}
           api={inspectApi}
-          onHover={setHovered}
+          minimapOn={showMinimap}
+          onToggleMinimap={() => setShowMinimap((v) => !v)}
         />
       )}
 
@@ -625,8 +634,8 @@ export default function GalleryPage() {
       )}
 
 
-      {/* Inspect mode — "you are here" minimap */}
-      {mode === "unguided" && inspecting && inspectedIndex != null && artworks[inspectedIndex]?.imageUrl && (
+      {/* Inspect mode — "you are here" minimap (toggle from the control panel) */}
+      {mode === "unguided" && inspecting && showMinimap && inspectedIndex != null && artworks[inspectedIndex]?.imageUrl && (
         <InspectMinimap
           imageUrl={artworks[inspectedIndex].imageUrl as string}
           dims={paintingDimsRef.current[inspectedIndex] ?? { pw: 1, ph: 1, frameWidth: 0.09 }}
