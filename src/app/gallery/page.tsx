@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import type { Artwork, Exhibition } from "@/lib/sanity";
 
@@ -33,6 +33,34 @@ function animateSaturation(uniform: { value: number }, target: number, duration:
 
 function setAllSaturation(refs: React.MutableRefObject<{ [key: number]: { value: number } }>, value: number) {
   Object.values(refs.current).forEach(u => { u.value = value; });
+}
+
+// ── Inspect-mode vignette ───────────────────────────────────────────────────
+// A radial darkening overlaid on the scene to draw the eye to the canvas. Alpha
+// follows a power curve t^curve across [start,end] (% of the way to the farthest
+// corner). The curve has zero slope at the centre, so darkening eases in
+// imperceptibly — no hard knee, hence no visible "bright ellipse" ring.
+const VIGNETTE = {
+  start: 24,      // % radius of the fully-clear core
+  end: 96,        // % radius where it reaches full darkness
+  maxAlpha: 0.86, // darkness at the edge (0–1)
+  curve: 2.6,     // ramp exponent — higher keeps the centre clear, darkens the rim
+  r: 6, g: 4, b: 10, // tint, matched to the room background ≈ rgb(6,3,9)
+};
+
+// The ending shape is orientation-aware: an ellipse hugs a landscape screen,
+// while a portrait screen uses a circle so a (landscape) canvas keeps its sides
+// clear and only the empty wall above/below it darkens.
+function buildVignette(shape: "ellipse" | "circle"): string {
+  const STOPS = 18;
+  const parts: string[] = [];
+  for (let i = 0; i <= STOPS; i++) {
+    const t = i / STOPS;
+    const pos = VIGNETTE.start + (VIGNETTE.end - VIGNETTE.start) * t;
+    const a = VIGNETTE.maxAlpha * Math.pow(t, VIGNETTE.curve);
+    parts.push(`rgba(${VIGNETTE.r},${VIGNETTE.g},${VIGNETTE.b},${a.toFixed(3)}) ${pos.toFixed(2)}%`);
+  }
+  return `radial-gradient(${shape} farthest-corner at 50% 50%, ${parts.join(", ")})`;
 }
 
 // "You are here" locator for inspect mode — a small thumbnail of the *framed*
@@ -136,6 +164,21 @@ export default function GalleryPage() {
   const inspectApi = useRef<{ zoom: (dir: 1 | -1) => void; exit: () => void } | null>(null);
   const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number } }>({});
   const viewRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
+
+  // Inspect-mode vignette — ellipse on a landscape screen, circle on portrait
+  // (so a landscape canvas keeps its sides clear instead of being pinched).
+  const [vigPortrait, setVigPortrait] = useState(false);
+  useEffect(() => {
+    const apply = () => setVigPortrait(window.innerHeight > window.innerWidth);
+    apply();
+    window.addEventListener("resize", apply);
+    window.addEventListener("orientationchange", apply);
+    return () => {
+      window.removeEventListener("resize", apply);
+      window.removeEventListener("orientationchange", apply);
+    };
+  }, []);
+  const vignetteBg = useMemo(() => buildVignette(vigPortrait ? "circle" : "ellipse"), [vigPortrait]);
 
   // The whole room — wallpaper, lighting, every painting + frame — is held behind
   // one Suspense gate and revealed in a single frame once all of it is decoded.
@@ -457,7 +500,7 @@ export default function GalleryPage() {
       {mode === "unguided" && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 150, pointerEvents: "none",
-          background: "radial-gradient(ellipse at center, transparent 50%, rgba(5,3,8,0.6) 100%)",
+          background: vignetteBg,
           opacity: inspecting ? 1 : 0, transition: "opacity 1s ease",
         }} />
       )}
