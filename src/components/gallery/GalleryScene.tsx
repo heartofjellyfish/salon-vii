@@ -17,6 +17,11 @@ export interface InspectApi {
   exit: () => void;
 }
 
+// Which control set the keys currently drive, so the UI can flash the right hint
+// when they change meaning: roaming the room, the inspect entry (whole frame),
+// or zoomed onto the cropped surface.
+export type ControlPhase = "roam" | "entry" | "cropped";
+
 // Normalised view rectangle over the *framed* painting (canvas + frame), 0..1,
 // for the minimap. The whole framed work is the [0,1] box.
 export interface InspectView {
@@ -49,6 +54,8 @@ interface GallerySceneProps {
   // Which painting is being inspected, so it alone loads the high-res master.
   inspecting?: boolean;
   inspectedIndex?: number | null;
+  // Fired when the active key set changes, so the UI can flash a fresh hint.
+  onPhaseChange?: (phase: ControlPhase) => void;
 }
 
 const VIEW_DIST = 3.2; // metres back from the wall — close, comfortable viewing distance
@@ -187,6 +194,7 @@ function AnchorControls({
   revealed,
   paintingDimsRef,
   onInspectingChange,
+  onPhaseChange,
   inspectApi,
   viewRef,
 }: {
@@ -196,6 +204,7 @@ function AnchorControls({
   revealed: boolean;
   paintingDimsRef: React.MutableRefObject<{ [index: number]: PaintingDims }>;
   onInspectingChange?: (inspecting: boolean, artworkIndex?: number) => void;
+  onPhaseChange?: (phase: ControlPhase) => void;
   inspectApi?: React.MutableRefObject<InspectApi | null>;
   viewRef?: React.MutableRefObject<InspectView | null>;
 }) {
@@ -244,6 +253,8 @@ function AnchorControls({
   // Swallow a held ↑ once it has crossed into inspect / leaned onto the surface,
   // so it stops there until released instead of running on.
   const swallowUp = useRef(false);
+  // Last reported control phase, so we only notify the UI on a real change.
+  const phaseRef = useRef<ControlPhase>("roam");
 
   // Pan offsets across the framed work (inspect only), in metres. panTarget moves
   // while an arrow is held; pan eases toward it for a soft start/stop.
@@ -537,6 +548,17 @@ function AnchorControls({
         inspectRatio.current = THREE.MathUtils.clamp(inspectRatio.current, minRatio.current, 1);
       }
     }
+    // Report which control set is active so the UI can flash a fresh key hint the
+    // moment the arrows change meaning (roam → entry → cropped).
+    const phase: ControlPhase = !inspecting.current
+      ? "roam"
+      : inspectRatio.current > 1 / FIT_MARGIN
+      ? "entry"
+      : "cropped";
+    if (phase !== phaseRef.current) {
+      phaseRef.current = phase;
+      onPhaseChange?.(phase);
+    }
     // Dolly target: the continuous inspect ratio (frame fills → crisp limit) or the
     // room base that frames frame + nameplate (room).
     const targetDepth = inspecting.current
@@ -642,6 +664,7 @@ function SceneContent({
   saturationRefs,
   paintingDimsRef,
   onInspectingChange,
+  onPhaseChange,
   inspectApi,
   viewRef,
   inspecting,
@@ -659,6 +682,7 @@ function SceneContent({
           revealed={revealed}
           paintingDimsRef={paintingDimsRef}
           onInspectingChange={onInspectingChange}
+          onPhaseChange={onPhaseChange}
           inspectApi={inspectApi}
           viewRef={viewRef}
         />
@@ -704,6 +728,7 @@ export default function GalleryScene({
   saturationRefs,
   paintingDimsRef,
   onInspectingChange,
+  onPhaseChange,
   inspectApi,
   viewRef,
   inspecting,
@@ -731,6 +756,7 @@ export default function GalleryScene({
         saturationRefs={saturationRefs}
         paintingDimsRef={paintingDimsRef}
         onInspectingChange={onInspectingChange}
+        onPhaseChange={onPhaseChange}
         inspectApi={inspectApi}
         viewRef={viewRef}
         inspecting={inspecting}

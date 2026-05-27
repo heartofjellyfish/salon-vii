@@ -188,6 +188,46 @@ function DebugHUD({
   );
 }
 
+// Context control hints — an intuitive key→action strip that flashes whenever the
+// keys change meaning (roam → inspect entry → cropped surface). Dark glyph pills
+// (legible on anything) + a short gold label.
+const CONTROL_HINTS: Record<"roam" | "entry" | "cropped", { keys: string[]; label: string }[]> = {
+  roam: [{ keys: ["←", "→"], label: "切换画作" }, { keys: ["↑"], label: "走近" }, { keys: ["↓"], label: "退后" }],
+  entry: [{ keys: ["↑"], label: "贴近端详" }, { keys: ["↓"], label: "退出" }, { keys: ["+", "−"], label: "缩放" }],
+  cropped: [{ keys: ["↑", "↓", "←", "→"], label: "移动" }, { keys: ["+", "−"], label: "缩放" }, { keys: ["Esc"], label: "退出" }],
+};
+
+function ControlHints({ phase, show }: { phase: "roam" | "entry" | "cropped"; show: boolean }) {
+  return (
+    <div style={{
+      position: "fixed", bottom: 30, left: "50%", transform: "translateX(-50%)", zIndex: 200,
+      display: "flex", alignItems: "center", gap: 18, pointerEvents: "none",
+      opacity: show ? 1 : 0, transition: "opacity 0.7s ease",
+    }}>
+      {CONTROL_HINTS[phase].map((item, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <div style={{ display: "flex", gap: 4 }}>
+            {item.keys.map((k) => (
+              <div key={k} style={{
+                minWidth: 24, height: 24, padding: "0 5px", borderRadius: 6,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                border: "1px solid rgba(201,168,76,0.45)", background: "rgba(5,3,8,0.6)",
+                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+                color: "#c9a84c", fontSize: 13, lineHeight: 1, boxShadow: "0 1px 4px rgba(0,0,0,0.5)",
+              }}>{k}</div>
+            ))}
+          </div>
+          <span style={{
+            fontFamily: "'Cormorant Garamond', serif", fontSize: 13.5, fontStyle: "italic",
+            letterSpacing: "0.03em", color: "rgba(201,168,76,0.92)", whiteSpace: "nowrap",
+            textShadow: "0 1px 3px rgba(0,0,0,0.92), 0 0 10px rgba(0,0,0,0.6)",
+          }}>{item.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function GalleryPage() {
   const [mode, setMode] = useState<"guided" | "unguided">("unguided");
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -201,7 +241,6 @@ export default function GalleryPage() {
   const [overlayGone, setOverlayGone] = useState(false);
   const saturationRefs = useRef<{ [key: number]: { value: number } }>({});
   const autoAdvanceRef = useRef<number | null>(null);
-  const [showHint, setShowHint] = useState(false);
   const [inspecting, setInspecting] = useState(false);
   const [inspectedIndex, setInspectedIndex] = useState<number | null>(null);
   const [inspectCue, setInspectCue] = useState(false); // brief "look closely" prompt on entry
@@ -212,6 +251,10 @@ export default function GalleryPage() {
   // ?debug — show a small resolution readout for the inspected painting (hidden
   // for normal visitors).
   const debug = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug"), []);
+  // Which control set the keys drive now (roam / inspect entry / cropped surface).
+  // Flash a fresh hint whenever it changes so the visitor always knows the keys.
+  const [controlPhase, setControlPhase] = useState<"roam" | "entry" | "cropped">("roam");
+  const [hintsOn, setHintsOn] = useState(false);
 
   // Inspect-mode vignette — ellipse on a landscape screen, circle on portrait
   // (so a landscape canvas keeps its sides clear instead of being pinched).
@@ -242,23 +285,6 @@ export default function GalleryPage() {
     return () => clearTimeout(t);
   }, [ready]);
 
-  // Reveal the navigation hint a beat after the room brightens, then let it
-  // dismiss itself — or fade out the moment the visitor takes the wheel.
-  useEffect(() => {
-    if (!ready) return;
-    const appear = setTimeout(() => setShowHint(true), 1400);
-    const vanish = setTimeout(() => setShowHint(false), 8000);
-    const dismiss = (e: KeyboardEvent) => {
-      if (e.key.startsWith("Arrow")) setShowHint(false);
-    };
-    window.addEventListener("keydown", dismiss);
-    return () => {
-      clearTimeout(appear);
-      clearTimeout(vanish);
-      window.removeEventListener("keydown", dismiss);
-    };
-  }, [ready]);
-
   // When inspect mode begins, flash the "look closely" prompt and zoom buttons,
   // then let them recede — the buttons come back on hover.
   useEffect(() => {
@@ -270,6 +296,15 @@ export default function GalleryPage() {
     const t = setTimeout(() => setInspectCue(false), 2600);
     return () => clearTimeout(t);
   }, [inspecting]);
+
+  // Flash the control hint whenever the active key set changes (and on first
+  // entry to free mode), then let it recede.
+  useEffect(() => {
+    if (mode !== "unguided" || !ready) { setHintsOn(false); return; }
+    setHintsOn(true);
+    const t = setTimeout(() => setHintsOn(false), 4200);
+    return () => clearTimeout(t);
+  }, [controlPhase, mode, ready]);
 
   // Load data — reuse what the entrance already fetched (sessionStorage) so the
   // gallery doesn't pay a second round trip behind the black screen.
@@ -386,6 +421,7 @@ export default function GalleryPage() {
           viewRef={viewRef}
           inspecting={inspecting}
           inspectedIndex={inspectedIndex}
+          onPhaseChange={setControlPhase}
         />
       )}
 
@@ -491,33 +527,8 @@ export default function GalleryPage() {
         </div>
       )}
 
-      {/* Arrow-key navigation hint */}
-      {mode === "unguided" && !inspecting && (
-        <div style={{
-          position: "fixed", bottom: 34, left: "50%", transform: "translateX(-50%)", zIndex: 200,
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
-          opacity: showHint ? 1 : 0, transition: "opacity 1.2s ease", pointerEvents: "none",
-        }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 30px)", gridTemplateRows: "repeat(2, 30px)", gap: 5, justifyItems: "center" }}>
-            {(["", "↑", "", "←", "↓", "→"] as const).map((k, i) => (
-              <div key={i} style={{
-                visibility: k ? "visible" : "hidden",
-                width: 30, height: 30, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center",
-                border: "1px solid rgba(201,168,76,0.4)", background: "rgba(5,3,8,0.55)",
-                backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-                color: "#c9a84c", fontSize: 15, lineHeight: 1,
-              }}>{k}</div>
-            ))}
-          </div>
-          <span style={{
-            fontFamily: "'Cormorant Garamond', serif", fontSize: 12.5, fontStyle: "italic",
-            letterSpacing: "0.04em", color: "rgba(201,168,76,0.92)", whiteSpace: "nowrap",
-            textShadow: "0 1px 3px rgba(0,0,0,0.92), 0 0 10px rgba(0,0,0,0.6)",
-          }}>
-            方向键漫步展厅 · use the arrow keys to wander
-          </span>
-        </div>
-      )}
+      {/* Context control hint — flashes the current keys whenever they change */}
+      {mode === "unguided" && <ControlHints phase={controlPhase} show={hintsOn} />}
 
       {/* Inspect mode — vignette to focus the eye on the canvas */}
       {mode === "unguided" && (
@@ -541,13 +552,6 @@ export default function GalleryPage() {
             textShadow: "0 1px 3px rgba(0,0,0,0.95), 0 0 14px rgba(0,0,0,0.7)",
           }}>
             贴近观看 · look closely
-          </span>
-          <span style={{
-            fontFamily: "'Cormorant Garamond', serif", fontSize: 12.5,
-            letterSpacing: "0.03em", color: "rgba(201,168,76,0.92)",
-            textShadow: "0 1px 3px rgba(0,0,0,0.95), 0 0 10px rgba(0,0,0,0.65)",
-          }}>
-            方向键漫游 · 按住 +/− 缩放 · Esc 退后
           </span>
         </div>
       )}
