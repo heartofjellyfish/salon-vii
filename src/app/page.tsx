@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import FilmGrain from "@/components/FilmGrain";
 
 export default function HomePage() {
   const [entering, setEntering] = useState(false);
@@ -253,6 +254,11 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+
+      {/* Film grain fades in the instant we push through the door, so the dark
+          already carries texture — and bridges straight into the gallery's grain
+          instead of a dead pure-black gap. */}
+      <FilmGrain opacity={entering ? 1 : 0} />
 
       <style jsx global>{`
         /* On enter: slide the right-hand doorway's centre (~80vw) to mid-screen
