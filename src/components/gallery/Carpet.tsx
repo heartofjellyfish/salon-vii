@@ -4,12 +4,13 @@ import { useMemo } from "react";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
-// Faded Persian (Esfahan) carpet laid under the centre daybed to ground the
-// seating and warm the floor. Source is already modelled flat in the XZ plane
-// in metres, so we just scale it to a sensible footprint, sit it on the floor
-// and centre it — long axis along X to match the daybed.
+// Deep-red Persian (Esfahan) carpet under the centre daybed. In the warm,
+// dim "evening salon" mood a rich red rug is what sits right (a pale/cool rug
+// is for the bright room); it grounds the seating and keeps the centre warm.
+// Source is modelled flat in the XZ plane in metres; we scale to a footprint,
+// sit it on the floor and centre it, long axis along X.
 const MODEL_URL = "/models/persian_carpet.glb";
-const TARGET_LEN = 2.6; // metres, long axis (a touch beyond the ~1.95m daybed)
+const TARGET_LEN = 4.2; // metres, long axis (large rug filling the centre)
 
 function useFittedCarpet() {
   const { scene } = useGLTF(MODEL_URL);

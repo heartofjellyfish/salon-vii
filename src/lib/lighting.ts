@@ -55,7 +55,19 @@ export const LIGHTING_PRESETS = {
     fog: { color: "#0e0812", near: 16, far: 38 },
     accent: { color: "#ffe6bc", intensity: 5.5, frontOffset: 0.45, pad: 0.5 },
   },
+
+  // Evening salon — the dim, amber, lived-in mood: the room drops into shadow,
+  // a warm lamp pool falls on the centre seating, and each painting still pops
+  // because it keeps its own picture-light accent.
+  eveningSalon: {
+    label: "Evening Salon",
+    exposure: 1.3,
+    ambient: { color: "#5a3a22", intensity: 0.22 },
+    hemisphere: { sky: "#caa06a", ground: "#0a0608", intensity: 0.4 },
+    fog: { color: "#140b10", near: 18, far: 44 },
+    accent: { color: "#ffe3b4", intensity: 5.0, frontOffset: 0.5, pad: 0.6 },
+  },
 } satisfies Record<string, LightingPreset>;
 
 // Switch this to preview a different preset.
-export const ACTIVE_LIGHTING: LightingPreset = LIGHTING_PRESETS.brightMuseum;
+export const ACTIVE_LIGHTING: LightingPreset = LIGHTING_PRESETS.eveningSalon;

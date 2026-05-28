@@ -44,7 +44,7 @@ function useFittedDaybed() {
     // Deepen the leather toward oxblood: the bright museum ambient washes the
     // baked albedo out to a sleepy mid-brown, so multiply the leather (not the
     // wood) by a warm red to bring back the rich wine seen in the studio render.
-    const oxblood = new THREE.Color(0.7, 0.2, 0.17);
+    const oxblood = new THREE.Color(0.6, 0.16, 0.21);
     o.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -74,13 +74,14 @@ export default function Bench({ position = [0, 0, -2] as [number, number, number
     <group position={position}>
       <primitive object={daybed} />
 
-      {/* warm accent so the centrepiece reads against the dim room */}
+      {/* warm lamp pool: in the dim evening room this is the key light on the
+          centre seating, like a floor lamp glowing beside it */}
       <pointLight
         position={[0, 1.7, 0.9]}
-        intensity={9}
-        distance={6}
+        intensity={15}
+        distance={7}
         decay={2}
-        color="#ffd7a0"
+        color="#ffcf95"
       />
 
       {/* soft contact shadow to ground it on the parquet */}
