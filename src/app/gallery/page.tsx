@@ -106,7 +106,7 @@ function InspectMinimap({
 }: {
   imageUrl: string;
   dims: { pw: number; ph: number; frameWidth: number };
-  viewRef: React.MutableRefObject<{ cx: number; cy: number; w: number; h: number } | null>;
+  viewRef: React.MutableRefObject<{ cx: number; cy: number; w: number; h: number; samp?: number } | null>;
   isTouch: boolean;
   api: React.MutableRefObject<InspectApi | null>;
 }) {
@@ -207,10 +207,12 @@ function DebugHUD({
   index,
   artwork,
   dimsRef,
+  viewRef,
 }: {
   index: number;
   artwork: Artwork;
   dimsRef: React.MutableRefObject<{ [index: number]: { texWidth?: number; loadedW?: number; loadedH?: number } }>;
+  viewRef: React.MutableRefObject<{ samp?: number } | null>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const master = useMemo(() => {
@@ -223,13 +225,25 @@ function DebugHUD({
       const d = dimsRef.current[index];
       if (ref.current) {
         const loaded = d?.loadedW ? `${d.loadedW}×${d.loadedH ?? "?"}` : "…";
-        ref.current.textContent = `${artwork?.title ?? ""} · loaded ${loaded} · target ${d?.texWidth ?? "?"}px · master ${master}`;
+        // samp = resident texels per device pixel at the current zoom. ≥1 means
+        // every screen pixel is backed by ≥1 real image pixel (crisp); <1 means
+        // the texture is being stretched (soft) — which the zoom cap should
+        // prevent, so this should never drop below ~1 at max zoom.
+        const samp = viewRef.current?.samp;
+        let quality = "";
+        if (typeof samp === "number") {
+          quality = samp >= 0.98
+            ? ` · SHARP ${samp.toFixed(2)}×`
+            : ` · UPSCALING ${(1 / samp).toFixed(1)}×`;
+        }
+        ref.current.textContent = `${artwork?.title ?? ""} · loaded ${loaded} · target ${d?.texWidth ?? "?"}px · master ${master}${quality}`;
+        ref.current.style.color = typeof samp === "number" && samp < 0.98 ? "#ff7a6b" : "#c9e8a8";
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [index, artwork, master, dimsRef]);
+  }, [index, artwork, master, dimsRef, viewRef]);
   return (
     <div
       ref={ref}
@@ -431,7 +445,7 @@ export default function GalleryPage() {
   const musicFadeRaf = useRef(0);
   const inspectApi = useRef<InspectApi | null>(null);
   const paintingDimsRef = useRef<{ [index: number]: { pw: number; ph: number; frameWidth: number; texWidth?: number; loadedW?: number; loadedH?: number } }>({});
-  const viewRef = useRef<{ cx: number; cy: number; w: number; h: number } | null>(null);
+  const viewRef = useRef<{ cx: number; cy: number; w: number; h: number; samp?: number } | null>(null);
   // ?debug — show a small resolution readout for the inspected painting (hidden
   // for normal visitors).
   const debug = useMemo(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug"), []);
@@ -913,7 +927,7 @@ export default function GalleryPage() {
 
       {/* ?debug — resident texture resolution readout for the inspected work */}
       {debug && mode === "unguided" && inspecting && inspectedIndex != null && artworks[inspectedIndex] && (
-        <DebugHUD index={inspectedIndex} artwork={artworks[inspectedIndex]} dimsRef={paintingDimsRef} />
+        <DebugHUD index={inspectedIndex} artwork={artworks[inspectedIndex]} dimsRef={paintingDimsRef} viewRef={viewRef} />
       )}
 
       {/* Mode Toggle */}

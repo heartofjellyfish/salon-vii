@@ -35,6 +35,9 @@ export interface InspectView {
   cy: number; // view centre, fraction down the framed height
   w: number; // view width as a fraction of the framed width
   h: number; // view height as a fraction of the framed height
+  // ?debug only: resident texels per device pixel across the screen at the
+  // current zoom. ≥1 ⇒ crisp (1:1 or minified); <1 ⇒ being upscaled (soft).
+  samp?: number;
 }
 
 export interface PaintingDims {
@@ -795,14 +798,18 @@ function AnchorControls({
     const aspect = sizeRef.current.width / Math.max(1, sizeRef.current.height);
     const dims = currentDims();
     const fit = framedFit(dims, aspect);
-    // Deepest crisp zoom for THIS painting: the ratio at which the resident
-    // texture maps ~1:1 to device pixels. Going deeper would only upscale (soft),
-    // so clamp the deepest stop there — high-res masters / larger screens earn a
-    // deeper stop, small masters and phones stop shallower. hHalf at fit is the
-    // half view-width (m) when the bare frame fills the screen.
+    // Deepest crisp zoom for THIS painting: the ratio at which the *currently
+    // resident* texture maps ~1:1 to device pixels. Going deeper would only
+    // upscale (soft), so clamp the deepest stop there. We key off loadedW (the
+    // texture actually bound right now) rather than the planned target, so while
+    // the hi-res master is still downloading you can only zoom to the base's 1:1
+    // (crisp) — the deeper stop unlocks the moment the hi-res becomes resident.
+    // High-res masters / larger screens thus earn a deeper stop; small masters
+    // and phones stop shallower. hHalf at fit is the half view-width (m) when the
+    // bare frame fills the screen.
     const hHalfAtFit = fit * TAN_HALF_V * aspect;
     const fbW = gl.domElement.width || sizeRef.current.width;
-    const texW = dims.texWidth ?? 2048;
+    const texW = dims.loadedW ?? dims.texWidth ?? 2048;
     minRatio.current = THREE.MathUtils.clamp(
       (dims.pw * fbW) / (2 * texW * hHalfAtFit),
       DEEPEST_RATIO,
@@ -917,11 +924,20 @@ function AnchorControls({
       if (inspecting.current) {
         const framedW = framedHalfW * 2;
         const framedH = framedHalfH * 2;
+        // Resident texels mapped across the screen width ÷ device pixels there.
+        // dims.pw (m) spans the whole loaded texture (loadedW texels); the screen
+        // shows 2*hHalf m of it across fbW device pixels.
+        const fbW = gl.domElement.width || sizeRef.current.width;
+        const loadedW = dims.loadedW ?? dims.texWidth ?? 0;
+        const samp = loadedW > 0 && dims.pw > 0
+          ? (loadedW * (2 * hHalf / dims.pw)) / fbW
+          : undefined;
         viewRef.current = {
           cx: 0.5 + panX.current / framedW,
           cy: 0.5 - panY.current / framedH,
           w: Math.min(1, (2 * hHalf) / framedW),
           h: Math.min(1, (2 * vHalf) / framedH),
+          samp,
         };
       } else {
         viewRef.current = null;

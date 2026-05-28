@@ -136,7 +136,9 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
   const groupRef = useRef<THREE.Group>(null!);
   const gl = useThree((s) => s.gl);
   // Device-adaptive width we'd load on inspect (≤ base ⇒ stay on base). Reported
-  // into paintingDimsRef so the camera can cap zoom at this texture's 1:1 point.
+  // into paintingDimsRef as texWidth — only a fallback for the camera's 1:1 zoom
+  // cap before any texture is resident; once loaded it clamps on loadedW (the
+  // texture actually bound) so it never lets you zoom past what's really there.
   const hiResWidth = useMemo(() => pickHiResWidth(gl, artwork), [gl, artwork]);
   const inspectTexWidth = Math.max(2048, hiResWidth);
 
@@ -174,16 +176,24 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
     const hiUrl = `/api/img?u=${encodeURIComponent(
       urlFor(artwork.image).width(hiResWidth).quality(90).auto("format").url()
     )}`;
-    new THREE.TextureLoader().load(hiUrl, (tex) => {
-      if (cancelled) {
-        tex.dispose();
-        return;
-      }
-      tex.colorSpace = baseTexture.colorSpace; // match base so the swap can't shift colour
-      tex.anisotropy = baseTexture.anisotropy || 8;
-      tex.needsUpdate = true;
-      setHiResTexture(tex);
-    });
+    new THREE.TextureLoader().load(
+      hiUrl,
+      (tex) => {
+        if (cancelled) {
+          tex.dispose();
+          return;
+        }
+        tex.colorSpace = baseTexture.colorSpace; // match base so the swap can't shift colour
+        tex.anisotropy = baseTexture.anisotropy || 8;
+        tex.needsUpdate = true;
+        setHiResTexture(tex);
+      },
+      undefined,
+      // On failure stay on the base texture. The camera caps deep zoom at the
+      // resident texture's 1:1 (loadedW), so the view simply can't zoom past the
+      // base's crisp limit instead of silently upscaling into a blur.
+      () => console.warn(`Hi-res load failed for "${artwork.title}" — staying on base`),
+    );
     return () => {
       cancelled = true;
     };
