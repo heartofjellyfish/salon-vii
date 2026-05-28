@@ -4,13 +4,19 @@ import { useMemo } from "react";
 import { useGLTF, ContactShadows } from "@react-three/drei";
 import * as THREE from "three";
 
-// Oxblood leather daybed (Sketchfab "Leather Bench", CC) used as the gallery's
+// Leather daybed (Sketchfab "Leather Bench", CC) used as the gallery's
 // centrepiece. The source is FBX-derived with non-obvious units / orientation,
 // so instead of hard-coding a scale we measure the real bounds at runtime and
 // auto-fit: rotate the long axis onto X (parallel to the back wall), uniformly
 // scale to a target length, centre it horizontally and seat it on the floor.
 const MODEL_URL = "/models/leather_bench.glb";
 const TARGET_LEN = 1.95; // metres, long axis
+
+// Tuned-in-scene leather look.
+const LEATHER_COLOR = "#eae39a";
+const LEATHER_ROUGHNESS = 0.24; // glossy, waxed-leather sheen
+const LEATHER_GRAIN = 3; // normalScale — pronounced grain/tufting
+const LEATHER_REFLECTION = 1.1; // envMapIntensity
 
 function useFittedDaybed() {
   const { scene } = useGLTF(MODEL_URL);
@@ -24,9 +30,7 @@ function useFittedDaybed() {
     // 1. orient: make the longer horizontal axis run along X
     let box = new THREE.Box3().setFromObject(o);
     let size = box.getSize(new THREE.Vector3());
-    if (size.z > size.x) {
-      o.rotateY(Math.PI / 2);
-    }
+    if (size.z > size.x) o.rotateY(Math.PI / 2);
 
     // 2. uniform scale so the long axis hits TARGET_LEN
     box = new THREE.Box3().setFromObject(o);
@@ -41,10 +45,9 @@ function useFittedDaybed() {
     o.position.z -= center.z;
     o.position.y -= box.min.y;
 
-    // Tan "cowhide" leather: warm the washed-out baked albedo to a rich caramel,
-    // glossier (lower roughness) so it catches a real leather sheen off the
-    // environment + lamp, and crank the normal map so the grain/tufting reads.
-    const cowhide = new THREE.Color(0.82, 0.58, 0.39);
+    // Warm tan leather: glossy with a pronounced grain so it reads as real,
+    // waxed cowhide that catches the lamp + environment.
+    const leather = new THREE.Color(LEATHER_COLOR);
     o.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -53,50 +56,53 @@ function useFittedDaybed() {
       const tint = (m: THREE.Material) => {
         if (m && /Bench_(Seat|Side|Pillow)/i.test(m.name)) {
           const c = m.clone() as THREE.MeshStandardMaterial;
-          c.color = cowhide.clone();
-          c.roughness = Math.min(c.roughness ?? 0.5, 0.4); // glossier → leather sheen
-          c.envMapIntensity = 1.4; // pick up the warm environment reflections
-          if (c.normalMap && c.normalScale) c.normalScale.set(1.7, 1.7); // deeper grain
+          c.color = leather.clone();
+          c.roughness = LEATHER_ROUGHNESS;
+          c.envMapIntensity = LEATHER_REFLECTION;
+          if (c.normalMap && c.normalScale) c.normalScale.set(LEATHER_GRAIN, LEATHER_GRAIN);
           c.needsUpdate = true;
           return c;
         }
         return m;
       };
-      mesh.material = Array.isArray(mesh.material)
-        ? mesh.material.map(tint)
-        : tint(mesh.material);
+      mesh.material = Array.isArray(mesh.material) ? mesh.material.map(tint) : tint(mesh.material);
     });
 
     return o;
   }, [scene]);
 }
 
-export default function Bench({ position = [0, 0, -2] as [number, number, number] }) {
+export default function Bench() {
   const daybed = useFittedDaybed();
 
   return (
-    <group position={position}>
+    <group position={[0, 0, -2]}>
       <primitive object={daybed} />
 
-      {/* soft warm fill on the seating; the real floor lamp beside it is now
-          the key light, so this just keeps the daybed from going flat */}
-      <pointLight
-        position={[0, 1.7, 0.9]}
-        intensity={7}
-        distance={7}
-        decay={2}
-        color="#ffcf95"
-      />
+      {/* soft warm fill on the seating; the floor lamp beside it is the key
+          light, so this just keeps the daybed from going flat */}
+      <pointLight position={[0, 1.7, 0.9]} intensity={7} distance={7} decay={2} color="#ffcf95" />
 
-      {/* soft contact shadow to ground it on the parquet */}
+      {/* Deep, soft grounding shadow — dark enough that it pools under the whole
+          daybed and swallows the legs into it, the way the reference render does.
+          A tight, very dark core plus the wider soft falloff. */}
       <ContactShadows
-        position={[0, 0.012, 0]}
-        scale={4}
+        position={[0, 0.01, 0]}
+        scale={3}
+        far={1.6}
+        blur={2.2}
+        opacity={0.95}
+        resolution={1024}
+        color="#000000"
+      />
+      <ContactShadows
+        position={[0, 0.02, 0]}
+        scale={4.2}
         far={2}
-        blur={2.6}
+        blur={3.4}
         opacity={0.55}
         resolution={1024}
-        color="#1a0e08"
+        color="#0a0604"
       />
     </group>
   );

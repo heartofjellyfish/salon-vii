@@ -1063,7 +1063,7 @@ function SceneContent({
         <Room paused={!!inspecting} />
         <DuskLight />
         <Carpet position={[0, 0, -2]} />
-        <Bench position={[0, 0, -2]} />
+        <Bench />
         <FloorLamp position={[1.2, -0.02, -2.2]} rotationY={2.158} pointIntensity={1} />
         {/* warm reading spotlight from the lamp head, aimed at the seat (where a
             book would be) */}
