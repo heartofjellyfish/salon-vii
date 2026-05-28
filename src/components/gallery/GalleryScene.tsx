@@ -2,7 +2,7 @@
 
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
-import { PerspectiveCamera } from "@react-three/drei";
+import { PerspectiveCamera, Environment } from "@react-three/drei";
 import * as THREE from "three";
 import Room from "./Room";
 import DuskLight from "./DuskLight";
@@ -1045,6 +1045,17 @@ function SceneContent({
       <color attach="background" args={["#0a0508"]} />
       <ambientLight intensity={ACTIVE_LIGHTING.ambient.intensity} color={ACTIVE_LIGHTING.ambient.color} />
       <hemisphereLight args={[ACTIVE_LIGHTING.hemisphere.sky, ACTIVE_LIGHTING.hemisphere.ground, ACTIVE_LIGHTING.hemisphere.intensity]} />
+      {/* A dark, warm procedural environment so leather/brass/wood pick up real
+          specular reflections (the "sheen") instead of reading flat — kept dim so
+          it doesn't lift the evening mood. */}
+      <Environment background={false} resolution={128} frames={1}>
+        <mesh scale={50}>
+          <sphereGeometry args={[1, 24, 24]} />
+          <meshBasicMaterial color="#140d10" side={THREE.BackSide} />
+        </mesh>
+        <pointLight position={[8, 9, 6]} intensity={140} color="#ffe0b0" />
+        <pointLight position={[-7, 4, -5]} intensity={55} color="#b98a6a" />
+      </Environment>
       {/* One gate for the entire room: wallpaper, bench, every painting + frame +
           picture-light. Nothing renders until all of it resolves, so it appears
           in a single frame rather than popping in piece by piece. */}
@@ -1053,7 +1064,25 @@ function SceneContent({
         <DuskLight />
         <Carpet position={[0, 0, -2]} />
         <Bench position={[0, 0, -2]} />
-        <FloorLamp position={[1.25, 0, -2.2]} />
+        <FloorLamp position={[1.2, -0.02, -2.2]} rotationY={2.158} pointIntensity={1} />
+        {/* warm reading spotlight from the lamp head, aimed at the seat (where a
+            book would be) */}
+        <spotLight
+          position={[1.25, 1.48, -2.1]}
+          angle={0.7}
+          penumbra={0.85}
+          intensity={31}
+          distance={7}
+          decay={2}
+          color="#ffc78f"
+          castShadow
+          ref={(l) => {
+            if (l) {
+              l.target.position.set(-0.1, 0.4, -2);
+              l.target.updateMatrixWorld();
+            }
+          }}
+        />
         {artworks.map((artwork, index) => (
           <PaintingBoundary key={artwork._id}>
             <FloorLine artwork={artwork} />

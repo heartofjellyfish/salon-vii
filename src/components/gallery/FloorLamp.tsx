@@ -8,7 +8,7 @@ import * as THREE from "three";
 // to glow warm (so the lamp reads as "on"), and a warm point light at the shade
 // throws the cosy pool the evening room is built around. Auto-fit like the other
 // props: stand the tallest axis up, scale to a real height, seat on the floor.
-const MODEL_URL = "/models/floor_lamp.glb";
+const MODEL_URL = "/models/brass_lamp.glb";
 const TARGET_H = 1.7; // metres tall
 
 function useFittedLamp() {
@@ -48,7 +48,7 @@ function useFittedLamp() {
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       mats.forEach((m) => {
         const mat = m as THREE.MeshStandardMaterial;
-        if (mat && /fabric|shade/i.test(mat.name)) {
+        if (mat && /fabric|shade|bulb|glass|material/i.test(mat.name)) {
           mat.emissive = glow.clone();
           mat.emissiveIntensity = 1.5;
           mat.needsUpdate = true;
@@ -65,15 +65,23 @@ function useFittedLamp() {
   }, [scene]);
 }
 
-export default function FloorLamp({ position = [1.5, 0, -1.2] as [number, number, number] }) {
+export default function FloorLamp({
+  position = [1.5, 0, -1.2] as [number, number, number],
+  rotationY = 0,
+  pointIntensity = 16,
+}: {
+  position?: [number, number, number];
+  rotationY?: number;
+  pointIntensity?: number;
+}) {
   const { object, shadePos } = useFittedLamp();
   return (
-    <group position={position}>
+    <group position={position} rotation={[0, rotationY, 0]}>
       <primitive object={object} />
       {/* warm pool thrown from the shade */}
       <pointLight
         position={shadePos}
-        intensity={16}
+        intensity={pointIntensity}
         distance={7}
         decay={2}
         color="#ffb866"

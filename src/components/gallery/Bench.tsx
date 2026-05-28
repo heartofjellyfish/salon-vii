@@ -41,10 +41,10 @@ function useFittedDaybed() {
     o.position.z -= center.z;
     o.position.y -= box.min.y;
 
-    // Deepen the leather toward oxblood: the bright museum ambient washes the
-    // baked albedo out to a sleepy mid-brown, so multiply the leather (not the
-    // wood) by a warm red to bring back the rich wine seen in the studio render.
-    const oxblood = new THREE.Color(0.6, 0.16, 0.21);
+    // Tan "cowhide" leather: warm the washed-out baked albedo to a rich caramel,
+    // glossier (lower roughness) so it catches a real leather sheen off the
+    // environment + lamp, and crank the normal map so the grain/tufting reads.
+    const cowhide = new THREE.Color(0.82, 0.58, 0.39);
     o.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -53,7 +53,11 @@ function useFittedDaybed() {
       const tint = (m: THREE.Material) => {
         if (m && /Bench_(Seat|Side|Pillow)/i.test(m.name)) {
           const c = m.clone() as THREE.MeshStandardMaterial;
-          c.color = oxblood.clone();
+          c.color = cowhide.clone();
+          c.roughness = Math.min(c.roughness ?? 0.5, 0.4); // glossier → leather sheen
+          c.envMapIntensity = 1.4; // pick up the warm environment reflections
+          if (c.normalMap && c.normalScale) c.normalScale.set(1.7, 1.7); // deeper grain
+          c.needsUpdate = true;
           return c;
         }
         return m;
