@@ -121,13 +121,7 @@ function SaturationMaterial({
       fragmentShader="uniform sampler2D map; uniform sampler2D hiMap; uniform float hiMix; uniform float saturation; varying vec2 vUv;
         void main() {
           vec4 lo = texture2D(map, vUv);
-          // Negative LOD bias on the inspect master: with trilinear mipmapping the
-          // GPU's computed LOD drifts above 0 even at ~1:1 (perspective + derivative
-          // rounding), so it blends in the half-res mip and the surface looks soft
-          // right where it should be crispest. Biasing -1 pins sampling to mip0 near
-          // 1:1 (the zoom is already capped at 1:1, so this never upscales); mipmaps
-          // stay on so the frame-fill entry view doesn't alias.
-          vec4 hi = texture2D(hiMap, vUv, -1.0);
+          vec4 hi = texture2D(hiMap, vUv);
           vec4 tex = mix(lo, hi, hiMix);
           float gray = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
           gl_FragColor = vec4(mix(vec3(gray), tex.rgb, saturation), tex.a);
