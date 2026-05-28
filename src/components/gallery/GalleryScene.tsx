@@ -8,6 +8,7 @@ import * as THREE from "three";
 import Room from "./Room";
 import DuskLight from "./DuskLight";
 import Bench from "./Bench";
+import Plant from "./Plant";
 import Carpet from "./Carpet";
 import FloorLamp from "./FloorLamp";
 import Painting from "./Painting";
@@ -1065,6 +1066,9 @@ function SceneContent({
         <DuskLight />
         <Carpet position={[0, 0, -2]} />
         <Bench />
+        {/* The two tallest trees flanking the north wall — left and right corners. */}
+        <Plant url="/models/plants/dracaena_variegata.glb" position={[-5, 0, -5]} />
+        <Plant url="/models/plants/dypsis_lutescens.glb" position={[5, 0, -5]} />
         <FloorLamp position={[1.2, -0.02, -2.2]} rotationY={2.158} pointIntensity={1} />
         {/* warm reading spotlight from the lamp head, aimed at the seat (where a
             book would be) */}
