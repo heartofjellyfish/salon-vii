@@ -185,6 +185,12 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
         }
         tex.colorSpace = baseTexture.colorSpace; // match base so the swap can't shift colour
         tex.anisotropy = baseTexture.anisotropy || 8;
+        // Snap to the nearest mip instead of blending two (the default trilinear
+        // LinearMipmapLinear). Near 1:1 the GPU's LOD drifts a hair above 0, so
+        // trilinear mixes in the half-res mip and the surface reads slightly soft
+        // right at the deepest zoom; nearest-mip keeps it on mip0 (crisp) there.
+        // Mipmaps stay generated, so the frame-fill entry view still anti-aliases.
+        tex.minFilter = THREE.LinearMipmapNearestFilter;
         tex.needsUpdate = true;
         setHiResTexture(tex);
       },
