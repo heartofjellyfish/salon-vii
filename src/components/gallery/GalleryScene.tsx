@@ -11,7 +11,7 @@ import Carpet from "./Carpet";
 import Painting from "./Painting";
 import FloorLine from "./FloorLine";
 import { ACTIVE_LIGHTING } from "@/lib/lighting";
-import { getPaintingTransform, getFacingDir } from "@/lib/gallery-config";
+import { getPaintingTransform, getFacingDir, HALF_W, BACK_Z, FRONT_Z } from "@/lib/gallery-config";
 import type { Artwork } from "@/lib/sanity";
 
 export interface InspectApi {
@@ -69,6 +69,11 @@ interface GallerySceneProps {
 }
 
 const VIEW_DIST = 3.2; // metres back from the wall — close, comfortable viewing distance
+// On a portrait phone the room base distance is large (the painting's width drives
+// the fit), so the farthest roam stop can dolly the eye clear past the opposite
+// wall — landing behind its frames, which then read as empty boxes. Keep the eye
+// this far in front of every wall so it always stays inside the room.
+const WALL_MARGIN = 0.5;
 const EYE_Y = 1.55; // standing eye level = painting centre line (level sightline)
 const VFOV_DEG = 58; // must match the PerspectiveCamera fov below
 const TAN_HALF_V = Math.tan(((VFOV_DEG * Math.PI) / 180) / 2);
@@ -946,8 +951,21 @@ function AnchorControls({
     fx /= l;
     fz /= l;
     // The anchor camPos sits at VIEW_DIST from the wall; shift along the facing
-    // axis to honour the current dolly depth (+ = back into the room).
-    const extra = depth - VIEW_DIST;
+    // axis to honour the current dolly depth (+ = back into the room). Cap the
+    // backward travel so the eye never crosses the opposite wall (and ends up
+    // behind its frames): clamp to where the facing axis meets the room bounds,
+    // less a margin. Walls are axis-aligned, so only the facing axis moves.
+    let extra = depth - VIEW_DIST;
+    const xMax = HALF_W - WALL_MARGIN;
+    const xMin = -HALF_W + WALL_MARGIN;
+    const zMax = FRONT_Z - WALL_MARGIN;
+    const zMin = BACK_Z + WALL_MARGIN;
+    let maxExtra = Infinity;
+    if (fx > 1e-6) maxExtra = Math.min(maxExtra, (xMax - px) / fx);
+    else if (fx < -1e-6) maxExtra = Math.min(maxExtra, (xMin - px) / fx);
+    if (fz > 1e-6) maxExtra = Math.min(maxExtra, (zMax - pz) / fz);
+    else if (fz < -1e-6) maxExtra = Math.min(maxExtra, (zMin - pz) / fz);
+    if (extra > maxExtra) extra = maxExtra;
     // Pan offset slides the framing across the wall plane: "right" lies in the
     // wall (= facing rotated 90° about up), "up" is world-up. Applied to both the
     // eye and the look-at so the optical axis stays perpendicular — a magnifier
