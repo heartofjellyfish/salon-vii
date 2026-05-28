@@ -74,11 +74,11 @@ export default function Bench({ position = [0, 0, -2] as [number, number, number
     <group position={position}>
       <primitive object={daybed} />
 
-      {/* warm lamp pool: in the dim evening room this is the key light on the
-          centre seating, like a floor lamp glowing beside it */}
+      {/* soft warm fill on the seating; the real floor lamp beside it is now
+          the key light, so this just keeps the daybed from going flat */}
       <pointLight
         position={[0, 1.7, 0.9]}
-        intensity={15}
+        intensity={7}
         distance={7}
         decay={2}
         color="#ffcf95"

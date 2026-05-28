@@ -8,6 +8,7 @@ import Room from "./Room";
 import DuskLight from "./DuskLight";
 import Bench from "./Bench";
 import Carpet from "./Carpet";
+import FloorLamp from "./FloorLamp";
 import Painting from "./Painting";
 import FloorLine from "./FloorLine";
 import { ACTIVE_LIGHTING } from "@/lib/lighting";
@@ -1052,6 +1053,7 @@ function SceneContent({
         <DuskLight />
         <Carpet position={[0, 0, -2]} />
         <Bench position={[0, 0, -2]} />
+        <FloorLamp position={[1.5, 0, -1.2]} />
         {artworks.map((artwork, index) => (
           <PaintingBoundary key={artwork._id}>
             <FloorLine artwork={artwork} />
