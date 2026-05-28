@@ -67,8 +67,9 @@ Key nuances (all in `AnchorControls`):
 
 | where | action |
 |---|---|
-| room (roam) | **drag** to page between paintings — *grab-the-room* (iPhone-natural) with **paging**: a swipe past ~46 px or a quick flick advances exactly one painting, then glides home; a short drag settles back. Disabled while inspecting. |
-| room (roam) | **scroll wheel / trackpad** glides the **continuous** room depth (closer / back); scrolling in past the closest point crosses into inspect |
+| room (roam) | **drag** to page between paintings — *grab-the-room* (iPhone-natural) with **paging**: a swipe past ~46 px or a quick flick advances exactly one painting, then glides home; a short drag settles back. The drag is held to a ±1-painting window (soft rubber-band beyond) so a fast throw never flings far and crawls back. Disabled while inspecting. |
+| room (roam) | **two-finger trackpad swipe ←/→** pages between paintings (mirrors the drag; one painting per swipe) |
+| room (roam) | **vertical scroll / trackpad** glides the **continuous** room depth (closer / back); scrolling in past the closest point crosses into inspect |
 | inspect | **two-finger scroll / trackpad** pans the magnifier; a **pinch** (ctrl+wheel) glides the continuous zoom; scrolling/pinching back out past the whole frame exits |
 | any painting | **click** → walk to it at the closest roam frame; **click again** (centred + closest) → look closely. Two-stage, same on every device. No-op in Guided mode and while inspecting. |
 | any nameplate | **click** → **description mode** (full-screen: work above, title / artist / year / narrative below). Free mode only. |

@@ -130,8 +130,16 @@ const WHEEL_ROAM_K = 0.0019; // roam: roamFactor multiplier per wheel-delta unit
 const DRAG_SENS = 0.012; // metres of path per screen pixel while dragging
 const SWIPE_MIN = 46; // px of net travel to page one painting
 const FLICK_MIN = 0.45; // px/ms release speed that pages even on a short throw
-const SETTLE_LAMBDA = 13; // damp rate the page glides home with (snappy but eased)
+const SETTLE_LAMBDA = 14; // damp rate the page glides home with (snappy but eased)
 const DOUBLE_TAP_MS = 300; // two taps within this (and close together) = double-tap
+// Drag stays within ±1 painting of where it began (with a soft rubber-band past
+// that), so a fast throw can't fling the camera far down the wall and then crawl
+// all the way back on release — the snap target is always adjacent, so it settles
+// at once. This is the iOS paging feel: one swipe moves at most one painting.
+const DRAG_RUBBER = 0.35; // how far past the ±1 window the drag drifts (0 = hard wall)
+// Two-finger horizontal trackpad swipe pages between paintings (mirrors the drag);
+// accumulate this much deltaX to step one, then lock until the swipe's inertia ends.
+const WHEEL_PAGE_STEP = 50;
 
 // The camera opens the show pulled well back into the room, then dollies in to
 // the default standing distance as the black curtain brightens — a slow
@@ -481,7 +489,9 @@ function AnchorControls({
     let pinchFromDist = 0, pinchFromRatio = 1;
     let roomPinchFromDist = 0, roomPinchFromFactor = 1; // roam two-finger dolly
     // Drag-as-paging bookkeeping.
-    let dragStartX = 0, dragStartIdx = 0, dragVel = 0, lastMoveT = 0;
+    let dragStartX = 0, dragStartU = 0, dragStartIdx = 0, dragVel = 0, lastMoveT = 0;
+    // Two-finger horizontal swipe paging (trackpad), with an inertia lock.
+    let wheelPageAccum = 0, wheelPageLocked = false, wheelPageTimer = 0;
     // Double-tap (touch, inspect): toggle whole-frame ↔ surface.
     let lastTapAt = 0, lastTapX = 0, lastTapY = 0;
 
@@ -499,9 +509,16 @@ function AnchorControls({
       dragging.current = true;
       lastX.current = x;
       dragStartX = x;
+      dragStartU = u.current;
       dragStartIdx = nearestAnchorIndex();
       dragVel = 0;
       lastMoveT = performance.now();
+    };
+    // Page one painting from wherever we are now, gliding there snappily.
+    const pageStep = (dir: 1 | -1) => {
+      const idx = THREE.MathUtils.clamp(nearestAnchorIndex() + dir, 0, U.length - 1);
+      targetU.current = U[idx];
+      easeLambda.current = SETTLE_LAMBDA;
     };
 
     const onDown = (e: PointerEvent) => {
@@ -566,9 +583,16 @@ function AnchorControls({
         if (dt > 0) dragVel = dx / dt; // px/ms, sign = drag direction
         lastMoveT = now;
         lastX.current = e.clientX;
-        // Grab-the-room (iPhone-natural) with a little resistance: the wall tracks
-        // the finger, so dragging right brings the painting on your left toward you.
-        u.current = THREE.MathUtils.clamp(u.current - dx * DRAG_SENS, 0, total);
+        // Grab-the-room (iPhone-natural): the wall tracks the finger (drag right
+        // brings the painting on your left toward you), mapped from the drag origin
+        // and held to a ±1-painting window with a soft rubber-band — so a fast throw
+        // can't sling the camera far and force a long crawl back on release.
+        const lo = U[Math.max(0, dragStartIdx - 1)];
+        const hi = U[Math.min(U.length - 1, dragStartIdx + 1)];
+        let next = dragStartU - (e.clientX - dragStartX) * DRAG_SENS;
+        if (next < lo) next = lo - (lo - next) * DRAG_RUBBER;
+        else if (next > hi) next = hi + (next - hi) * DRAG_RUBBER;
+        u.current = THREE.MathUtils.clamp(next, 0, total);
         targetU.current = u.current;
       } else if (gesture === "pan") {
         const mpp = panMpp.current;
@@ -635,10 +659,11 @@ function AnchorControls({
       }
     };
 
-    // Mouse wheel / trackpad. Roam: glide the continuous room depth (and cross into
-    // inspect scrolling in past the closest point). Inspect: a plain two-finger
-    // scroll pans the magnifier; a pinch (ctrl+wheel) glides the zoom. preventDefault
-    // so the page never scrolls or zooms behind the canvas.
+    // Mouse wheel / trackpad. Roam: a horizontal two-finger swipe pages between
+    // paintings (mirrors the drag); a vertical scroll glides the continuous room
+    // depth (and crosses into inspect scrolling in past the closest point). Inspect:
+    // a plain two-finger scroll pans the magnifier; a pinch (ctrl+wheel) glides the
+    // zoom. preventDefault so the page never scrolls, zooms, or navigates back.
     const onWheel = (e: WheelEvent) => {
       if (!active) return;
       e.preventDefault();
@@ -653,6 +678,20 @@ function AnchorControls({
           const mpp = panMpp.current;
           panXTarget.current = THREE.MathUtils.clamp(panXTarget.current + e.deltaX * mpp, -maxXRef.current, maxXRef.current);
           panYTarget.current = THREE.MathUtils.clamp(panYTarget.current - e.deltaY * mpp, -maxYRef.current, maxYRef.current);
+        }
+        return;
+      }
+      // Clearly-horizontal swipe → page (the trackpad mirror of the mouse drag).
+      // One painting per swipe: lock after a step and only release once the swipe's
+      // inertia tail goes quiet, so momentum doesn't run through several paintings.
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY) * 1.2) {
+        if (wheelPageTimer) clearTimeout(wheelPageTimer);
+        wheelPageTimer = window.setTimeout(() => { wheelPageAccum = 0; wheelPageLocked = false; }, 150);
+        wheelPageAccum += e.deltaX;
+        if (!wheelPageLocked && Math.abs(wheelPageAccum) >= WHEEL_PAGE_STEP) {
+          pageStep(wheelPageAccum > 0 ? 1 : -1); // swipe-left → next, swipe-right → previous (mirrors drag)
+          wheelPageLocked = true;
+          wheelPageAccum = 0;
         }
         return;
       }
@@ -676,6 +715,7 @@ function AnchorControls({
       window.removeEventListener("pointerup", endPointer);
       window.removeEventListener("pointercancel", endPointer);
       el.removeEventListener("wheel", onWheel);
+      if (wheelPageTimer) clearTimeout(wheelPageTimer);
     };
     // exitInspect / nearestAnchorIndex only read refs, so a one-time bind is safe.
     // eslint-disable-next-line react-hooks/exhaustive-deps
