@@ -3,6 +3,7 @@
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { PerspectiveCamera, Environment } from "@react-three/drei";
+import { EffectComposer, N8AO } from "@react-three/postprocessing";
 import * as THREE from "three";
 import Room from "./Room";
 import DuskLight from "./DuskLight";
@@ -1076,6 +1077,11 @@ function SceneContent({
           decay={2}
           color="#ffc78f"
           castShadow
+          shadow-mapSize={[2048, 2048]}
+          shadow-bias={-0.0004}
+          shadow-normalBias={0.02}
+          shadow-camera-near={0.3}
+          shadow-camera-far={8}
           ref={(l) => {
             if (l) {
               l.target.position.set(-0.1, 0.4, -2);
@@ -1101,6 +1107,12 @@ function SceneContent({
         ))}
         <SceneReady onReady={onReady} />
       </Suspense>
+      {/* Real screen-space ambient occlusion: darkens contact/occluded areas
+          (under the daybed, around the legs) the way an offline render would —
+          this is the computed "natural black", not a painted blob. */}
+      <EffectComposer enableNormalPass={false}>
+        <N8AO aoRadius={2.4} intensity={9} distanceFalloff={1.2} halfRes color="black" />
+      </EffectComposer>
     </>
   );
 }

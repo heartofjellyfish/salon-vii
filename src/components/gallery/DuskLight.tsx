@@ -23,20 +23,24 @@ export default function DuskLight({
 
   // Soft warm pools on the floor (additive glow decals). Scattered and varied so
   // they read like sunlight fallen across the boards, not a uniform wash.
+  // NOTE: deliberately kept OFF the central seating — an additive glow under the
+  // sofa lights that floor no matter what (it ignores occlusion), which fights
+  // the natural shadow we want beneath the daybed.
   const pools = useMemo(
     () =>
       [
-        { pos: [1.0, 0.03, cz + 0.8] as [number, number, number], w: 4.2, d: 3.0, o: 0.55 },
-        { pos: [-2.7, 0.03, cz - 1.6] as [number, number, number], w: 3.0, d: 2.1, o: 0.4 },
-        { pos: [3.3, 0.03, cz - 2.6] as [number, number, number], w: 2.4, d: 1.7, o: 0.3 },
+        { pos: [-3.4, 0.03, cz - 1.4] as [number, number, number], w: 3.0, d: 2.1, o: 0.42 },
+        { pos: [3.4, 0.03, cz - 2.6] as [number, number, number], w: 2.4, d: 1.7, o: 0.32 },
+        { pos: [2.7, 0.03, cz + 2.2] as [number, number, number], w: 3.2, d: 2.2, o: 0.34 },
       ],
     [cz]
   );
 
-  // Explicit target so the spotlight reliably aims at the main pool.
+  // Explicit target so the spotlight reliably aims at a pool — kept away from the
+  // sofa so the warm key doesn't wash out the seating's shadow.
   const target = useMemo(() => {
     const o = new THREE.Object3D();
-    o.position.set(1.0, 0, cz + 0.8);
+    o.position.set(-3.4, 0, cz - 1.4);
     return o;
   }, [cz]);
 

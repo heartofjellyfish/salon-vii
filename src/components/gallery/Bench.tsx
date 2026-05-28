@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useGLTF, ContactShadows } from "@react-three/drei";
+import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 
 // Leather daybed (Sketchfab "Leather Bench", CC) used as the gallery's
@@ -9,14 +9,15 @@ import * as THREE from "three";
 // so instead of hard-coding a scale we measure the real bounds at runtime and
 // auto-fit: rotate the long axis onto X (parallel to the back wall), uniformly
 // scale to a target length, centre it horizontally and seat it on the floor.
+// It casts a real shadow from the reading spotlight (see GalleryScene).
 const MODEL_URL = "/models/leather_bench.glb";
 const TARGET_LEN = 1.95; // metres, long axis
 
 // Tuned-in-scene leather look.
 const LEATHER_COLOR = "#eae39a";
-const LEATHER_ROUGHNESS = 0.24; // glossy, waxed-leather sheen
-const LEATHER_GRAIN = 3; // normalScale — pronounced grain/tufting
-const LEATHER_REFLECTION = 1.1; // envMapIntensity
+const LEATHER_ROUGHNESS = 0.24;
+const LEATHER_GRAIN = 3;
+const LEATHER_REFLECTION = 1.1;
 
 function useFittedDaybed() {
   const { scene } = useGLTF(MODEL_URL);
@@ -45,8 +46,6 @@ function useFittedDaybed() {
     o.position.z -= center.z;
     o.position.y -= box.min.y;
 
-    // Warm tan leather: glossy with a pronounced grain so it reads as real,
-    // waxed cowhide that catches the lamp + environment.
     const leather = new THREE.Color(LEATHER_COLOR);
     o.traverse((child) => {
       const mesh = child as THREE.Mesh;
@@ -79,31 +78,9 @@ export default function Bench() {
     <group position={[0, 0, -2]}>
       <primitive object={daybed} />
 
-      {/* soft warm fill on the seating; the floor lamp beside it is the key
-          light, so this just keeps the daybed from going flat */}
-      <pointLight position={[0, 1.7, 0.9]} intensity={7} distance={7} decay={2} color="#ffcf95" />
-
-      {/* Deep, soft grounding shadow — dark enough that it pools under the whole
-          daybed and swallows the legs into it, the way the reference render does.
-          A tight, very dark core plus the wider soft falloff. */}
-      <ContactShadows
-        position={[0, 0.01, 0]}
-        scale={3}
-        far={1.6}
-        blur={2.2}
-        opacity={0.95}
-        resolution={1024}
-        color="#000000"
-      />
-      <ContactShadows
-        position={[0, 0.02, 0]}
-        scale={4.2}
-        far={2}
-        blur={3.4}
-        opacity={0.55}
-        resolution={1024}
-        color="#0a0604"
-      />
+      {/* soft warm fill so the daybed front doesn't go flat-black; the reading
+          spotlight (GalleryScene) is the key light and casts the real shadow */}
+      <pointLight position={[0, 1.7, 0.9]} intensity={5} distance={7} decay={2} color="#ffcf95" />
     </group>
   );
 }

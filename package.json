@@ -11,12 +11,15 @@
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
+    "@react-three/postprocessing": "^3.0.4",
     "@sanity/client": "^7.22.0",
     "@sanity/image-url": "^2.1.1",
     "@types/howler": "^2.2.13",
     "@types/three": "^0.184.1",
     "howler": "^2.2.4",
+    "n8ao": "^1.10.1",
     "next": "^15.5.18",
+    "postprocessing": "^6.39.1",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "three": "^0.184.0"
