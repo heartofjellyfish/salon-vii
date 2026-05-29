@@ -3,14 +3,14 @@
 > _Last updated: 2026-05-29._
 > The "why" behind how the room is lit and how the art is drawn. These were all
 > reverse-engineered from visual bugs; read this before touching `Painting.tsx`,
-> `PaintingLighting.tsx`, `lighting.ts`, `quality.ts`, or the N8AO post-process.
+> `lighting.ts`, `quality.ts`, or the N8AO post-process.
 
 ## 1. Paintings are unlit, true-colour — always
 
 The painting canvas (`SaturationMaterial` in `Painting.tsx`) is **unlit** in both
 roam and inspect. It shows the image at its true, unmodified file colour; the
-room's light never tints or dims it. The per-painting **spotlight
-(`PaintingLighting.tsx`) lights only the wall pool + the frame**, never the canvas.
+room's light never tints or dims it. The warm **pool on the wall around each work
+is a faked additive decal** (`PicturePool` in `Painting.tsx`), never a real light.
 
 - This is a deliberate aesthetic call: the art must read true from across the
   room, like a backlit reproduction. We tried making the canvas a physically-lit
@@ -18,6 +18,18 @@ room's light never tints or dims it. The per-painting **spotlight
   warm and dimmed it; **rejected**. Don't reintroduce lit paintings.
 - Bonus: unlit is far cheaper (no per-light loop over a full-screen quad on
   inspect), and it removes the roam↔inspect brightness "pop".
+
+### 1b. Why the pool is a faked decal, not a real light
+The pool used to be a real per-painting `SpotLight` (`PaintingLighting.tsx`, now
+deleted). Measured on prod it was the scene's **#1 cost by far** — removing the
+nine of them took roam from ~27 → ~77fps (they're real lights, and the room is
+fill-rate bound, so each one shaded every fragment of the whole room every frame).
+But the light and the art never move, so the pool it cast is a **fixed blob** — we
+bake it as a static additive decal (`PicturePool` in `Painting.tsx`) instead. Same
+look (it was static anyway), ~free. The frames lose the real overhead light's
+specular relief, but read fine on their normal map + ambient (no shared relief
+light was needed). If the pool ever needs to track a moving light, this is the
+thing to revisit. (Same faking philosophy as the frame drop-shadow, §2b.)
 
 ### Colour-space gotcha (this one cost the most)
 The canvas material **must go through three's built-in colour pipeline**. A
@@ -93,8 +105,9 @@ Room brightness is layered (`lighting.ts` presets; active = `eveningSalon`):
   bypass it (see §1), so it only affects the room, not the art.
 - **`ambient` / `hemi`** — directionless fill. Raise → greys/lifts the darks;
   **lower → deeper, moodier shadows.**
-- **picture spotlight** (`PaintingLighting`) — `intensity` / `angle` (pool size) /
-  `penumbra` (edge softness) / colour of the wall pool around each work.
+- **picture pool** (`PicturePool` in `Painting.tsx`) — a **faked additive wall decal,
+  not a real light** (see §1b). `?tune` `spotIntensity` (glow strength) / `spotAngle`
+  (pool size) / `spotColor` (warmth) drive it; `spotPenumbra` is now unused.
 - **N8AO** — crevice black (see §2).
 
 `?tune` mounts a **code-split leva panel** (`TuningPanel.tsx`, driven by the
