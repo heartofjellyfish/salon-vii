@@ -1141,7 +1141,7 @@ function SceneContent({
           this is the computed "natural black", not a painted blob. */}
       {aoEnabled && (
         <EffectComposer ref={(c) => { (window as unknown as { __composer?: unknown }).__composer = c; }} enableNormalPass>
-          <N8AO aoRadius={aoRadius} intensity={aoIntensity} distanceFalloff={1} color="black" />
+          <N8AO aoRadius={aoRadius} intensity={inspecting ? 0 : aoIntensity} distanceFalloff={1} color="black" />
         </EffectComposer>
       )}
     </>
