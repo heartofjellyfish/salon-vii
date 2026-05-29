@@ -90,17 +90,58 @@ function SaturationMaterial({
   saturationRef: React.MutableRefObject<{ value: number }>;
   mode: string;
 }) {
+  // Own the extra uniforms so they update synchronously (the saturation-reveal and
+  // hi-res cross-fade animate these every frame); onBeforeCompile wires these same
+  // objects into both materials' shaders.
   const uniforms = useMemo(() => ({
-    map: { value: base },
     hiMap: { value: hiRes ?? base },
     hiMix: { value: 0 },
     saturation: { value: mode === "unguided" ? 1.0 : 0.0 },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- textures swap in place below
   }), [mode]);
 
-  // Keep the sampled textures current without rebuilding the material (which
-  // would reset the in-flight saturation reveal).
-  useEffect(() => { uniforms.map.value = base; }, [base, uniforms]);
+  // Two materials, built once and reused (so entering inspect swaps a pre-compiled
+  // program instead of compiling a fresh shader each time — that recompile was the
+  // close-up hitch). Both run the SAME injection — blend hi-res over the base and
+  // apply the saturation-reveal on diffuseColor — grafted via onBeforeCompile so we
+  // keep three's colour management (a hand-rolled raw shader skipped the sRGB output
+  // encode and washed the image out).
+  const { lit, inspect } = useMemo(() => {
+    const inject = (m: THREE.Material) => {
+      m.onBeforeCompile = (shader) => {
+        shader.uniforms.hiMap = uniforms.hiMap;
+        shader.uniforms.hiMix = uniforms.hiMix;
+        shader.uniforms.saturation = uniforms.saturation;
+        shader.fragmentShader = shader.fragmentShader
+          .replace(
+            "#include <common>",
+            "uniform sampler2D hiMap;\nuniform float hiMix;\nuniform float saturation;\n#include <common>",
+          )
+          .replace(
+            "#include <map_fragment>",
+            `#include <map_fragment>
+            {
+              vec4 sv_hi = texture2D( hiMap, vMapUv );
+              vec3 sv_blend = mix( diffuseColor.rgb, sv_hi.rgb, hiMix );
+              float sv_gray = dot( sv_blend, vec3( 0.299, 0.587, 0.114 ) );
+              diffuseColor.rgb = mix( vec3( sv_gray ), sv_blend, saturation );
+            }`,
+          );
+      };
+    };
+    // Roam: physically lit — the room's light decides how each piece reads.
+    const lit = new THREE.MeshStandardMaterial({ map: base, roughness: 0.82, metalness: 0.0 });
+    inject(lit);
+    // Inspect: unlit + tone-map-bypassed → the painting at its true, unmodified
+    // file colour, and a cheap full-screen pass. Still colour-managed by three, so
+    // it is NOT washed out the way the old raw shader was.
+    const inspect = new THREE.MeshBasicMaterial({ map: base, toneMapped: false });
+    inject(inspect);
+    return { lit, inspect };
+  }, [uniforms, base]);
+
+  useEffect(() => () => { lit.dispose(); inspect.dispose(); }, [lit, inspect]);
+  useEffect(() => { lit.map = base; inspect.map = base; }, [base, lit, inspect]);
   useEffect(() => { uniforms.hiMap.value = hiRes ?? base; }, [hiRes, base, uniforms]);
   useEffect(() => { saturationRef.current = uniforms.saturation; }, [saturationRef, uniforms.saturation]);
 
@@ -114,20 +155,8 @@ function SaturationMaterial({
     if (Math.abs(target - u.value) < 0.002) u.value = target;
   });
 
-  return (
-    <shaderMaterial
-      uniforms={uniforms}
-      vertexShader="varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }"
-      fragmentShader="uniform sampler2D map; uniform sampler2D hiMap; uniform float hiMix; uniform float saturation; varying vec2 vUv;
-        void main() {
-          vec4 lo = texture2D(map, vUv);
-          vec4 hi = texture2D(hiMap, vUv);
-          vec4 tex = mix(lo, hi, hiMix);
-          float gray = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
-          gl_FragColor = vec4(mix(vec3(gray), tex.rgb, saturation), tex.a);
-        }"
-    />
-  );
+  // Inspecting THIS work → unlit true-colour material; roaming → lit material.
+  return <primitive object={reveal ? inspect : lit} attach="material" />;
 }
 
 export default function Painting({ artwork, index, saturationRefs, paintingDimsRef, mode, hiRes, onReveal, onClick, onPlaqueClick }: PaintingProps) {
@@ -158,9 +187,12 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
   }
 
   const baseTexture = useLoader(TextureLoader, imageUrl);
-  // Keep texels crisp at the grazing/close angles of "look closely" inspect mode.
-  if (baseTexture && baseTexture.anisotropy !== 8) {
+  // Keep texels crisp at the grazing/close angles of "look closely" inspect mode,
+  // and tag the image as sRGB so every material decodes/encodes it correctly (the
+  // lit roam material and the colour-managed inspect material both rely on this).
+  if (baseTexture && (baseTexture.anisotropy !== 8 || baseTexture.colorSpace !== THREE.SRGBColorSpace)) {
     baseTexture.anisotropy = 8;
+    baseTexture.colorSpace = THREE.SRGBColorSpace;
     baseTexture.needsUpdate = true;
   }
 

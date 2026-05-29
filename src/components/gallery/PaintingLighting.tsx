@@ -1,7 +1,7 @@
 "use client";
 
 import * as THREE from "three";
-import { ACTIVE_LIGHTING } from "@/lib/lighting";
+import { useTuningStore } from "./tuningStore";
 
 interface PaintingLightingProps {
   position: [number, number, number];
@@ -21,24 +21,25 @@ interface PaintingLightingProps {
 // magnitude cheaper, and the overhead-cone look is the one the salon wants.
 const HEIGHT_ABOVE = 1.5; // m above painting centre, toward the ceiling
 const FORWARD = 0.9;      // m out from the wall into the room
-const ANGLE = 0.5;        // cone half-angle (rad)
-const PENUMBRA = 0.7;     // soft cone edge
 const DECAY = 2;
 const DISTANCE = 7;
-const INTENSITY = 15;     // spotlight scale (decay=2); tuned for a gentle wall pool
 
 export default function PaintingLighting({ position, facing }: PaintingLightingProps) {
   const [fx, , fz] = facing;
   const [px, py, pz] = position;
+  const intensity = useTuningStore((s) => s.spotIntensity);
+  const angle = useTuningStore((s) => s.spotAngle);
+  const penumbra = useTuningStore((s) => s.spotPenumbra);
+  const color = useTuningStore((s) => s.spotColor);
 
   return (
     <spotLight
       userData={{ perfGroup: "paintingLight" }}
-      color={ACTIVE_LIGHTING.accent.color}
-      intensity={INTENSITY}
+      color={color}
+      intensity={intensity}
       position={[px + fx * FORWARD, py + HEIGHT_ABOVE, pz + fz * FORWARD]}
-      angle={ANGLE}
-      penumbra={PENUMBRA}
+      angle={angle}
+      penumbra={penumbra}
       decay={DECAY}
       distance={DISTANCE}
       // Aim the cone at the painting centre. The default target never moves, so set

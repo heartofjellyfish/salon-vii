@@ -1,6 +1,7 @@
 "use client";
 
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { Canvas, useThree, useFrame } from "@react-three/fiber";
 import { PerspectiveCamera, Environment } from "@react-three/drei";
 import { EffectComposer, N8AO } from "@react-three/postprocessing";
@@ -16,6 +17,11 @@ import FloorLine from "./FloorLine";
 import { PerfProbe } from "./Perf";
 import { ACTIVE_LIGHTING } from "@/lib/lighting";
 import { resolveQuality } from "@/lib/quality";
+import { useTuningStore } from "./tuningStore";
+
+// Live lighting/AO tuning GUI — only fetched (code-split) and mounted when the URL
+// carries ?tune, so leva never ships to normal visitors.
+const TuningPanel = dynamic(() => import("./TuningPanel"), { ssr: false });
 import { getPaintingTransform, getFacingDir, HALF_W, BACK_Z, FRONT_Z } from "@/lib/gallery-config";
 import type { Artwork } from "@/lib/sanity";
 
@@ -216,9 +222,10 @@ function SceneReady({ onReady }: { onReady?: () => void }) {
 // Keep tone-mapping exposure in sync with the active preset (updates on hot reload).
 function ExposureSync() {
   const gl = useThree((s) => s.gl);
+  const exposure = useTuningStore((s) => s.exposure);
   useEffect(() => {
-    gl.toneMappingExposure = ACTIVE_LIGHTING.exposure;
-  });
+    gl.toneMappingExposure = exposure;
+  }, [gl, exposure]);
   return null;
 }
 
@@ -1028,6 +1035,11 @@ function SceneContent({
   inspectedIndex,
 }: GallerySceneProps & { revealed: boolean }) {
   const { anchors, start } = useMemo(() => buildAnchors(artworks), [artworks]);
+  const ambient = useTuningStore((s) => s.ambient);
+  const hemi = useTuningStore((s) => s.hemi);
+  const aoIntensity = useTuningStore((s) => s.aoIntensity);
+  const aoRadius = useTuningStore((s) => s.aoRadius);
+  const plantFill = useTuningStore((s) => s.plantFill);
   // ?ao=off disables the N8AO contact-shadow post-process — a console-free perf A/B.
   const aoEnabled = useMemo(
     () => (typeof window === "undefined" ? true : new URLSearchParams(window.location.search).get("ao") !== "off"),
@@ -1052,8 +1064,8 @@ function SceneContent({
       <ExposureSync />
       <fog attach="fog" args={[ACTIVE_LIGHTING.fog.color, ACTIVE_LIGHTING.fog.near, ACTIVE_LIGHTING.fog.far]} />
       <color attach="background" args={["#0a0508"]} />
-      <ambientLight intensity={ACTIVE_LIGHTING.ambient.intensity} color={ACTIVE_LIGHTING.ambient.color} />
-      <hemisphereLight args={[ACTIVE_LIGHTING.hemisphere.sky, ACTIVE_LIGHTING.hemisphere.ground, ACTIVE_LIGHTING.hemisphere.intensity]} />
+      <ambientLight intensity={ambient} color={ACTIVE_LIGHTING.ambient.color} />
+      <hemisphereLight args={[ACTIVE_LIGHTING.hemisphere.sky, ACTIVE_LIGHTING.hemisphere.ground, hemi]} />
       {/* A dark, warm procedural environment so leather/brass/wood pick up real
           specular reflections (the "sheen") instead of reading flat — kept dim so
           it doesn't lift the evening mood. */}
@@ -1080,8 +1092,8 @@ function SceneContent({
         {/* The two tallest trees flanking the north wall — left and right corners.
             Each carries a short-throw warm fill so it reads in the dim corner. */}
         <group userData={{ perfGroup: "plants" }}>
-          <Plant url="/models/plants/dracaena_variegata.glb" position={[-5, 0, -5]} fillIntensity={11} fillDistance={3.5} fillHeight={1.3} fillFront={0.5} />
-          <Plant url="/models/plants/dypsis_lutescens.glb" position={[5, 0, -5]} fillIntensity={11} fillDistance={3.5} fillHeight={1.3} fillFront={0.5} />
+          <Plant url="/models/plants/dracaena_variegata.glb" position={[-5, 0, -5]} fillIntensity={plantFill} fillDistance={3.5} fillHeight={1.3} fillFront={0.5} />
+          <Plant url="/models/plants/dypsis_lutescens.glb" position={[5, 0, -5]} fillIntensity={plantFill} fillDistance={3.5} fillHeight={1.3} fillFront={0.5} />
         </group>
         {/* warm reading spotlight from the lamp head, aimed at the seat (where a
             book would be) */}
@@ -1128,8 +1140,8 @@ function SceneContent({
           (under the daybed, around the legs) the way an offline render would —
           this is the computed "natural black", not a painted blob. */}
       {aoEnabled && (
-        <EffectComposer ref={(c) => { (window as unknown as { __composer?: unknown }).__composer = c; }} enableNormalPass={false}>
-          <N8AO aoRadius={2.4} intensity={9} distanceFalloff={1.2} halfRes color="black" />
+        <EffectComposer ref={(c) => { (window as unknown as { __composer?: unknown }).__composer = c; }} enableNormalPass>
+          <N8AO aoRadius={aoRadius} intensity={aoIntensity} distanceFalloff={1} color="black" />
         </EffectComposer>
       )}
     </>
@@ -1154,12 +1166,18 @@ export default function GalleryScene({
 }: GallerySceneProps) {
   const [revealed, setRevealed] = useState(false);
   const quality = useMemo(() => resolveQuality(), []);
+  const showTune = useMemo(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("tune"),
+    [],
+  );
   const handleReady = useCallback(() => {
     setRevealed(true);
     onReady?.();
   }, [onReady]);
   return (
-    <Canvas
+    <>
+      {showTune && <TuningPanel />}
+      <Canvas
       gl={{ antialias: true, alpha: true, toneMapping: THREE.ReinhardToneMapping, toneMappingExposure: ACTIVE_LIGHTING.exposure }}
       // Reactive dpr: capped while roaming, full when inspecting a work. The prop is
       // always the desired value for the current state, so R3F's per-render dpr
@@ -1186,6 +1204,7 @@ export default function GalleryScene({
         inspectedIndex={inspectedIndex}
       />
       <PerfProbe />
-    </Canvas>
+      </Canvas>
+    </>
   );
 }

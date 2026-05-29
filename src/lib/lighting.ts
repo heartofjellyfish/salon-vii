@@ -61,9 +61,9 @@ export const LIGHTING_PRESETS = {
   // because it keeps its own picture-light accent.
   eveningSalon: {
     label: "Evening Salon",
-    exposure: 1.3,
-    ambient: { color: "#5a3a22", intensity: 0.22 },
-    hemisphere: { sky: "#caa06a", ground: "#0a0608", intensity: 0.4 },
+    exposure: 0.4,
+    ambient: { color: "#5a3a22", intensity: 0.8 },
+    hemisphere: { sky: "#caa06a", ground: "#0a0608", intensity: 0.32 },
     fog: { color: "#140b10", near: 18, far: 44 },
     accent: { color: "#ffe3b4", intensity: 5.0, frontOffset: 0.5, pad: 0.6 },
   },

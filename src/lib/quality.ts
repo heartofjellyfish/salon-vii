@@ -12,13 +12,14 @@ export type QualityMode = "performance" | "balanced" | "high";
 // roamDpr: cap while moving through the room. inspectDpr: cap when examining a work.
 export const QUALITY_MODES: Record<QualityMode, { roamDpr: number; inspectDpr: number }> = {
   performance: { roamDpr: 1.0, inspectDpr: 1.5 },
-  balanced: { roamDpr: 1.25, inspectDpr: 2.0 },
+  balanced: { roamDpr: 1.25, inspectDpr: 1.25 },
   high: { roamDpr: 2.0, inspectDpr: 2.0 },
 };
 
-// Default. Roam at 1.25 (measured ~29fps vs ~24 at 1.5); examining a work is always
-// full 2.0 regardless, so close-up sharpness is unaffected. The roam softness at
-// 1.25 vs 1.5 is marginal on Retina.
+// Default. Roam and inspect both at 1.25: keeping the DPR constant means entering
+// inspect no longer reallocates the framebuffer + post-processing targets, which
+// was a hitch on every close-up. The painting's own hi-res texture still carries
+// the detail for examining a work; DPR only sets how many screen pixels sample it.
 export const DEFAULT_QUALITY: QualityMode = "balanced";
 
 export interface ResolvedQuality {
