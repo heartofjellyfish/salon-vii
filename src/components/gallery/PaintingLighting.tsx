@@ -33,6 +33,7 @@ export default function PaintingLighting({ position, facing }: PaintingLightingP
 
   return (
     <spotLight
+      userData={{ perfGroup: "paintingLight" }}
       color={ACTIVE_LIGHTING.accent.color}
       intensity={INTENSITY}
       position={[px + fx * FORWARD, py + HEIGHT_ABOVE, pz + fz * FORWARD]}

@@ -1070,13 +1070,18 @@ function SceneContent({
       <Suspense fallback={null}>
         <Room paused={!!inspecting} />
         <DuskLight />
-        <Carpet position={[0, 0, -2]} />
-        <Bench />
+        {/* perfGroup tags let the ?diag isolation pass toggle these at runtime. */}
+        <group userData={{ perfGroup: "props" }}>
+          <Carpet position={[0, 0, -2]} />
+          <Bench />
+          <FloorLamp position={[1.2, -0.02, -2.2]} rotationY={2.158} pointIntensity={1} />
+        </group>
         {/* The two tallest trees flanking the north wall — left and right corners.
             Each carries a short-throw warm fill so it reads in the dim corner. */}
-        <Plant url="/models/plants/dracaena_variegata.glb" position={[-5, 0, -5]} fillIntensity={11} fillDistance={3.5} fillHeight={1.3} fillFront={0.5} />
-        <Plant url="/models/plants/dypsis_lutescens.glb" position={[5, 0, -5]} fillIntensity={11} fillDistance={3.5} fillHeight={1.3} fillFront={0.5} />
-        <FloorLamp position={[1.2, -0.02, -2.2]} rotationY={2.158} pointIntensity={1} />
+        <group userData={{ perfGroup: "plants" }}>
+          <Plant url="/models/plants/dracaena_variegata.glb" position={[-5, 0, -5]} fillIntensity={11} fillDistance={3.5} fillHeight={1.3} fillFront={0.5} />
+          <Plant url="/models/plants/dypsis_lutescens.glb" position={[5, 0, -5]} fillIntensity={11} fillDistance={3.5} fillHeight={1.3} fillFront={0.5} />
+        </group>
         {/* warm reading spotlight from the lamp head, aimed at the seat (where a
             book would be) */}
         <spotLight
