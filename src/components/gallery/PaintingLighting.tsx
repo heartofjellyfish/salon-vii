@@ -46,11 +46,6 @@ export default function PaintingLighting({ position, facing }: PaintingLightingP
       // its world position once (mirrors the reading-lamp spotlight).
       ref={(l: THREE.SpotLight | null) => {
         if (l) {
-          // Layer 1 = "lit by picture spotlights" — only the walls (Room.tsx) and the
-          // painting-group meshes opt in. The wall pool stays pixel-identical, but
-          // these 9 lights stop shading the floor / sofa / ceiling / plants (the big
-          // fill-rate saving). set(1) makes the light affect ONLY layer-1 objects.
-          l.layers.set(1);
           l.target.position.set(px, py, pz);
           l.target.updateMatrixWorld();
         }

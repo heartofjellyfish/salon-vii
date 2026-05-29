@@ -229,16 +229,6 @@ function ExposureSync() {
   return null;
 }
 
-// The picture spotlights live on layer 1 (so they light only the walls + frames,
-// not the floor/furniture/plants). A three.js light is only collected if it shares
-// a layer with the CAMERA — so the camera must also see layer 1 (it still renders
-// everything, since all objects keep layer 0). Without this the spotlights vanish.
-function CameraPictureLayer() {
-  const camera = useThree((s) => s.camera);
-  useEffect(() => { camera.layers.enable(1); }, [camera]);
-  return null;
-}
-
 // Camera controller with two modes that meet at the per-painting "fit" distance:
 //  • Room — drag or ←/→ to move between paintings, ↑/↓ to dolly. ↑ cannot go
 //    closer than fit (the whole framed work filling the screen); pressing ↑ there
@@ -1072,7 +1062,6 @@ function SceneContent({
         />
       )}
       <ExposureSync />
-      <CameraPictureLayer />
       <fog attach="fog" args={[ACTIVE_LIGHTING.fog.color, ACTIVE_LIGHTING.fog.near, ACTIVE_LIGHTING.fog.far]} />
       <color attach="background" args={["#0a0508"]} />
       <ambientLight intensity={ambient} color={ACTIVE_LIGHTING.ambient.color} />
