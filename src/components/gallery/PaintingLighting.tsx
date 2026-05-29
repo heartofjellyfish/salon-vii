@@ -1,10 +1,7 @@
 "use client";
 
-import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib.js";
+import * as THREE from "three";
 import { ACTIVE_LIGHTING } from "@/lib/lighting";
-
-// RectAreaLight needs its lookup textures initialised once before use.
-RectAreaLightUniformsLib.init();
 
 interface PaintingLightingProps {
   position: [number, number, number];
@@ -13,22 +10,44 @@ interface PaintingLightingProps {
   ph: number;
 }
 
-export default function PaintingLighting({ position, facing, pw, ph }: PaintingLightingProps) {
+// A gallery picture-light: a warm spotlight mounted above-and-in-front of the
+// work — like a ceiling track light — angled down onto it. The canvas is self-lit
+// by its own unlit shader, so this lights the FRAME and the WALL around the piece:
+// a soft warm pool that fades into the dim room, the way a real museum lights art.
+//
+// This replaces a per-painting RectAreaLight, which is the single most expensive
+// light type in three.js and was charging every fragment in the whole room for all
+// nine of them (~29ms/frame, ~77% of the GPU cost). A spotlight is ~an order of
+// magnitude cheaper, and the overhead-cone look is the one the salon wants.
+const HEIGHT_ABOVE = 1.5; // m above painting centre, toward the ceiling
+const FORWARD = 0.9;      // m out from the wall into the room
+const ANGLE = 0.5;        // cone half-angle (rad)
+const PENUMBRA = 0.7;     // soft cone edge
+const DECAY = 2;
+const DISTANCE = 7;
+const INTENSITY = 15;     // spotlight scale (decay=2); tuned for a gentle wall pool
+
+export default function PaintingLighting({ position, facing }: PaintingLightingProps) {
   const [fx, , fz] = facing;
   const [px, py, pz] = position;
-  const { accent } = ACTIVE_LIGHTING;
 
-  // A soft area light in front of the canvas, facing the wall — a rectangular
-  // picture-light. Sized a little larger than the painting so the wash is gentle
-  // and rectangular (no elliptical spotlight scallop).
   return (
-    <rectAreaLight
-      color={accent.color}
-      intensity={accent.intensity}
-      width={pw + accent.pad}
-      height={ph + accent.pad}
-      position={[px + fx * accent.frontOffset, py, pz + fz * accent.frontOffset]}
-      rotation={[0, Math.atan2(fx, fz), 0]}
+    <spotLight
+      color={ACTIVE_LIGHTING.accent.color}
+      intensity={INTENSITY}
+      position={[px + fx * FORWARD, py + HEIGHT_ABOVE, pz + fz * FORWARD]}
+      angle={ANGLE}
+      penumbra={PENUMBRA}
+      decay={DECAY}
+      distance={DISTANCE}
+      // Aim the cone at the painting centre. The default target never moves, so set
+      // its world position once (mirrors the reading-lamp spotlight).
+      ref={(l: THREE.SpotLight | null) => {
+        if (l) {
+          l.target.position.set(px, py, pz);
+          l.target.updateMatrixWorld();
+        }
+      }}
     />
   );
 }
