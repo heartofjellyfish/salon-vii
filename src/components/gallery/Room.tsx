@@ -30,6 +30,11 @@ function tiledClone(base: THREE.Texture, repeatX: number, repeatY: number) {
   return t;
 }
 
+// Walls opt into layer 1 so the picture spotlights light them (the wall pool)
+// WITHOUT also lighting the floor / ceiling / furniture / plants. The floor and
+// baseboards stay on layer 0 (lit by ambient/lamp/dusk only). See PaintingLighting.tsx.
+const litByPicture = (m: THREE.Mesh | null) => { if (m) m.layers.enable(1); };
+
 export default function Room({ paused = false }: { paused?: boolean }) {
   const wallpaper = useTexture("/textures/wallpaper.jpg");
   const wood = useTexture("/textures/floor-wood.jpg");
@@ -61,25 +66,25 @@ export default function Room({ paused = false }: { paused?: boolean }) {
       <CelestialSalonCeiling roomWidth={W} roomDepth={D} ceilingY={H} centerZ={ROOM_CENTER_Z} paused={paused} />
 
       {/* Back wall (north) */}
-      <mesh position={[0, H / 2, BACK_Z]} receiveShadow>
+      <mesh ref={litByPicture} position={[0, H / 2, BACK_Z]} receiveShadow>
         <planeGeometry args={[W, H]} />
         <meshStandardMaterial map={wideWall} roughness={0.85} />
       </mesh>
 
       {/* Front wall (south) */}
-      <mesh position={[0, H / 2, FRONT_Z]} rotation={[0, Math.PI, 0]}>
+      <mesh ref={litByPicture} position={[0, H / 2, FRONT_Z]} rotation={[0, Math.PI, 0]}>
         <planeGeometry args={[W, H]} />
         <meshStandardMaterial map={wideWall} roughness={0.85} />
       </mesh>
 
       {/* Left wall (west) */}
-      <mesh position={[-HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+      <mesh ref={litByPicture} position={[-HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[D, H]} />
         <meshStandardMaterial map={sideWall} roughness={0.85} />
       </mesh>
 
       {/* Right wall (east) */}
-      <mesh position={[HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
+      <mesh ref={litByPicture} position={[HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[D, H]} />
         <meshStandardMaterial map={sideWall} roughness={0.85} />
       </mesh>

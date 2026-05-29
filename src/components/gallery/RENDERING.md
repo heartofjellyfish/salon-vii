@@ -19,6 +19,19 @@ room's light never tints or dims it. The per-painting **spotlight
 - Bonus: unlit is far cheaper (no per-light loop over a full-screen quad on
   inspect), and it removes the roam↔inspect brightness "pop".
 
+### 1b. Picture lights are scoped to layer 1 (perf)
+The per-painting spotlight is the scene's biggest cost (real lights × a fill-rate-
+bound room). To cut it **without changing the look**, each spotlight is on **layer 1**
+(`l.layers.set(1)` in `PaintingLighting.tsx`), and only the **walls** (`Room.tsx`) and
+the **frame/plaque meshes** (`Painting.tsx` traverses its group → `layers.enable(1)`)
+opt into layer 1. So the wall pool + frame relief stay pixel-identical, but the nine
+lights no longer shade the floor / sofa / ceiling / plants.
+
+**Gotcha:** a three.js light is only collected if it shares a layer with the
+**camera** — so `CameraPictureLayer` (`GalleryScene.tsx`) calls
+`camera.layers.enable(1)`. Without it the spotlights vanish entirely (the wall goes
+flat). Any new object that should catch the picture pool must `layers.enable(1)`.
+
 ### Colour-space gotcha (this one cost the most)
 The canvas material **must go through three's built-in colour pipeline**. A
 hand-rolled raw `ShaderMaterial` that writes `gl_FragColor` directly **skips the

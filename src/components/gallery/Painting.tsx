@@ -292,6 +292,14 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
     };
   }, [hiResTexture]);
 
+  // Opt the frame + plaque into layer 1 so the picture spotlight (also on layer 1)
+  // catches their relief — the wall opts in via Room.tsx. The unlit canvas is
+  // unaffected. Re-applied each render (idempotent) so it catches the frame meshes
+  // once their textures have loaded.
+  useEffect(() => {
+    groupRef.current?.traverse((o) => o.layers.enable(1));
+  });
+
   // Calculate painting dimensions from the base texture (same aspect as hi-res),
   // so the camera-fit math never jitters when the hi-res fades in.
   let pw = 1.0, ph = 1.3;
