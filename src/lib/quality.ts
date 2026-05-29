@@ -12,12 +12,13 @@ export type QualityMode = "performance" | "balanced" | "high";
 // roamDpr: cap while moving through the room. inspectDpr: cap when examining a work.
 export const QUALITY_MODES: Record<QualityMode, { roamDpr: number; inspectDpr: number }> = {
   performance: { roamDpr: 1.0, inspectDpr: 1.5 },
-  balanced: { roamDpr: 1.5, inspectDpr: 2.0 },
+  balanced: { roamDpr: 1.25, inspectDpr: 2.0 },
   high: { roamDpr: 2.0, inspectDpr: 2.0 },
 };
 
-// Default prioritises quality: roam at 1.5. (Drop balanced.roamDpr to 1.25 if the
-// measured roam fps is still under ~40.)
+// Default. Roam at 1.25 (measured ~29fps vs ~24 at 1.5); examining a work is always
+// full 2.0 regardless, so close-up sharpness is unaffected. The roam softness at
+// 1.25 vs 1.5 is marginal on Retina.
 export const DEFAULT_QUALITY: QualityMode = "balanced";
 
 export interface ResolvedQuality {
