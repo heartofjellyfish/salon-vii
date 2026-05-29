@@ -6,8 +6,9 @@ import * as THREE from "three";
 import { TextureLoader } from "three";
 import { FrameGroup, getFrameDepth, getFrameWidth, FRAME_REBATE } from "./FrameBuilders";
 import Nameplate from "./Nameplate";
+import PaintingLighting from "./PaintingLighting";
 import { useTuningStore } from "./tuningStore";
-import { getPaintingTransform } from "@/lib/gallery-config";
+import { getPaintingTransform, getFacingDir } from "@/lib/gallery-config";
 import type { Artwork } from "@/lib/sanity";
 import { urlFor } from "@/lib/sanity";
 
@@ -199,57 +200,9 @@ function FrameShadow({ pw, ph, frameWidth }: { pw: number; ph: number; frameWidt
   );
 }
 
-// The picture "spotlight" is faked. A real per-painting spotlight was the scene's
-// #1 cost (~24ms/frame, ~half the GPU): nine real lights each shaded every fragment
-// of the fill-rate-bound room. But the light and the art never move, so the warm
-// pool it casts on the wall is a FIXED blob — we bake it as a static additive decal
-// instead. Same look (it was static anyway), ~free. Mirrors the faked frame shadow
-// and the additive dusk glow; the ?tune spot* knobs now drive this decal.
-function PicturePool({ pw, ph, frameWidth }: { pw: number; ph: number; frameWidth: number }) {
-  const intensity = useTuningStore((s) => s.spotIntensity);
-  const color = useTuningStore((s) => s.spotColor);
-  const angle = useTuningStore((s) => s.spotAngle); // bigger cone → bigger pool
-  // Footprint: a soft glow larger than the framed work; angle scales it.
-  const fw = pw + frameWidth * 2;
-  const fh = ph + frameWidth * 2;
-  const W = fw * (1.3 + angle);
-  const H = fh * (2.1 + angle);
-  const mat = useMemo(
-    () =>
-      new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending, // adds warm light onto the (lit) wall, damask shows through
-        uniforms: { uColor: { value: new THREE.Color(color) }, uStrength: { value: 0 } },
-        vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
-        fragmentShader: `
-          varying vec2 vUv; uniform vec3 uColor; uniform float uStrength;
-          void main(){
-            // Glow centred a little ABOVE the work (overhead cone), radial falloff,
-            // gently squashed vertically into a soft arch.
-            vec2 p = vec2((vUv.x - 0.5) * 1.25, vUv.y - 0.64);
-            float d = length(p * vec2(1.0, 0.82));
-            float g = pow(smoothstep(0.5, 0.0, d), 2.0);
-            gl_FragColor = vec4(uColor * uStrength * g, 1.0);
-          }`,
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- colour/strength update via uniforms below
-    [],
-  );
-  useEffect(() => { mat.uniforms.uColor.value.set(color); }, [mat, color]);
-  // Map the old spotlight intensity (≈11) onto an additive strength.
-  useEffect(() => { mat.uniforms.uStrength.value = intensity * 0.05; }, [mat, intensity]);
-  useEffect(() => () => mat.dispose(), [mat]);
-  // On the wall, behind the frame (which occludes the centre, leaving the arch).
-  return (
-    <mesh position={[0, 0, 0.004]} material={mat} renderOrder={0}>
-      <planeGeometry args={[W, H]} />
-    </mesh>
-  );
-}
-
 export default function Painting({ artwork, index, saturationRefs, paintingDimsRef, mode, hiRes, onReveal, onClick, onPlaqueClick }: PaintingProps) {
   const { position, rotation } = getPaintingTransform(artwork.position);
+  const facing = getFacingDir(artwork.position?.wall || "north");
   const groupRef = useRef<THREE.Group>(null!);
   const gl = useThree((s) => s.gl);
   // Device-adaptive width we'd load on inspect (≤ base ⇒ stay on base). Reported
@@ -377,10 +330,6 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
   return (
     <>
     <group ref={groupRef} position={position} rotation={rotation as any}>
-      {/* Faked warm pool the picture-light casts on the wall — a static additive
-          decal instead of a real per-painting spotlight (the scene's #1 GPU cost) */}
-      <PicturePool pw={pw} ph={ph} frameWidth={frameWidth} />
-
       {/* Painting canvas */}
       <mesh position={[0, 0, canvasZ]} onClick={handleClick} userData={{ index, artwork }}>
         <planeGeometry args={[pw, ph]} />
@@ -403,6 +352,9 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
       />
 
     </group>
+
+      {/* Lights — world space, outside the painting's own transform */}
+      <PaintingLighting position={position as [number, number, number]} facing={facing} pw={pw} ph={ph} />
     </>
   );
 }
