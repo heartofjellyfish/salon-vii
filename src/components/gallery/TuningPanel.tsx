@@ -23,6 +23,8 @@ export default function TuningPanel() {
       spotAngle: { value: TUNING_DEFAULTS.spotAngle, min: 0.15, max: 0.9, step: 0.01 },
       spotPenumbra: { value: TUNING_DEFAULTS.spotPenumbra, min: 0, max: 1, step: 0.01 },
       spotColor: { value: TUNING_DEFAULTS.spotColor },
+      frameShadow: { value: TUNING_DEFAULTS.frameShadow, min: 0, max: 1, step: 0.01 },
+      frameShadowDrop: { value: TUNING_DEFAULTS.frameShadowDrop, min: 0.05, max: 0.8, step: 0.01 },
     }),
     "Contact AO / 接触阴影": folder({
       aoIntensity: { value: TUNING_DEFAULTS.aoIntensity, min: 0, max: 12, step: 0.1 },

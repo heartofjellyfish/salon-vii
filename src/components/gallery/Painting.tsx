@@ -7,6 +7,7 @@ import { TextureLoader } from "three";
 import { FrameGroup, getFrameDepth, getFrameWidth, FRAME_REBATE } from "./FrameBuilders";
 import Nameplate from "./Nameplate";
 import PaintingLighting from "./PaintingLighting";
+import { useTuningStore } from "./tuningStore";
 import { getPaintingTransform, getFacingDir } from "@/lib/gallery-config";
 import type { Artwork } from "@/lib/sanity";
 import { urlFor } from "@/lib/sanity";
@@ -148,6 +149,57 @@ function SaturationMaterial({
   return <primitive object={material} attach="material" />;
 }
 
+// A faked contact/drop shadow under the frame's bottom edge. The picture
+// spotlights don't cast real shadows (one shadow map per painting would tank the
+// fill-rate-bound scene), so instead we lay a soft dark gradient on the wall just
+// below each frame. MultiplyBlending darkens the wallpaper multiplicatively, so
+// the damask pattern shows THROUGH the shadow instead of being flattened to grey.
+// Darkest right under the frame, fading down and feathered at the sides.
+function FrameShadow({ pw, ph, frameWidth }: { pw: number; ph: number; frameWidth: number }) {
+  const strength = useTuningStore((s) => s.frameShadow); // live-tunable via ?tune
+  const drop = useTuningStore((s) => s.frameShadowDrop); // how far it falls below the frame
+  // Widen the dark core a touch past the frame so it doesn't cut off at the corners.
+  const W = pw + frameWidth * 2 + 0.04;
+  const topY = -(ph / 2 + frameWidth); // frame's bottom edge in local space
+  // Build the material once; update strength via its uniform so dragging the panel
+  // doesn't recompile the shader.
+  const mat = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        // Multiply (dst * src) without MultiplyBlending's premultiplied-alpha
+        // requirement: where the shader outputs white the wall is unchanged, where
+        // it outputs <1 the wall (damask and all) is darkened.
+        blending: THREE.CustomBlending,
+        blendEquation: THREE.AddEquation,
+        blendSrc: THREE.ZeroFactor,
+        blendDst: THREE.SrcColorFactor,
+        uniforms: { uStrength: { value: strength } },
+        vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
+        fragmentShader: `
+          varying vec2 vUv; uniform float uStrength;
+          void main(){
+            float vert = pow(clamp(vUv.y, 0.0, 1.0), 0.9);                 // darkest just under the frame, fading down (gentle, so the body stays dark)
+            float side = smoothstep(0.0, 0.12, vUv.x) * smoothstep(0.0, 0.12, 1.0 - vUv.x);
+            float s = uStrength * vert * side;
+            gl_FragColor = vec4(vec3(1.0 - s), 1.0);                       // 1.0 = no change; <1 darkens (multiply)
+          }`,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- strength updates via the uniform below
+    [],
+  );
+  useEffect(() => { mat.uniforms.uStrength.value = strength; }, [mat, strength]);
+  useEffect(() => () => mat.dispose(), [mat]);
+  // Sit on the wall (z≈0, a hair in front to avoid z-fighting), top edge against
+  // the frame bottom, dropping downward by `drop`.
+  return (
+    <mesh position={[0, topY - drop / 2, 0.006]} material={mat} renderOrder={1}>
+      <planeGeometry args={[W, drop]} />
+    </mesh>
+  );
+}
+
 export default function Painting({ artwork, index, saturationRefs, paintingDimsRef, mode, hiRes, onReveal, onClick, onPlaqueClick }: PaintingProps) {
   const { position, rotation } = getPaintingTransform(artwork.position);
   const facing = getFacingDir(artwork.position?.wall || "north");
@@ -273,6 +325,7 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
   // Sit the canvas just behind the frame's front face (small rebate) so it isn't
   // sunk at the bottom of the frame's full depth.
   const canvasZ = getFrameDepth(artwork.frameStyle) - FRAME_REBATE;
+  const frameWidth = getFrameWidth(artwork.frameStyle);
 
   return (
     <>
@@ -282,6 +335,9 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
         <planeGeometry args={[pw, ph]} />
         <SaturationMaterial base={baseTexture} hiRes={hiResTexture} reveal={!!hiRes} saturationRef={satRef} mode={mode} />
       </mesh>
+
+      {/* Faked drop shadow on the wall under the frame's bottom edge */}
+      <FrameShadow pw={pw} ph={ph} frameWidth={frameWidth} />
 
       {/* Frame */}
       <group position={[0, 0, 0]}>

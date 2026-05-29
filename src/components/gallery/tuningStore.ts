@@ -18,6 +18,8 @@ export interface Tuning {
   spotPenumbra: number; // picture-light edge softness 0..1
   spotColor: string;
   plantFill: number; // plant corner fill-light intensity
+  frameShadow: number; // faked drop-shadow strength under each frame's bottom edge
+  frameShadowDrop: number; // how far that shadow falls below the frame (m)
 }
 
 export const TUNING_DEFAULTS: Tuning = {
@@ -31,6 +33,8 @@ export const TUNING_DEFAULTS: Tuning = {
   spotPenumbra: 1.0,
   spotColor: ACTIVE_LIGHTING.accent.color,
   plantFill: 1.5,
+  frameShadow: 1.0,
+  frameShadowDrop: 0.18,
 };
 
 export const useTuningStore = create<Tuning & { set: (patch: Partial<Tuning>) => void }>((set) => ({

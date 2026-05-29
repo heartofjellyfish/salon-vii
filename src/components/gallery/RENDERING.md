@@ -56,6 +56,25 @@ furniture / in corners. It is easy to make it look like grime:
   (don't unmount) so there's no render-target realloc on inspect entry.
 - `?ao=off` disables the whole pass for A/B.
 
+## 2b. Frame drop-shadow is faked (and that's deliberate)
+
+The picture spotlights **do not cast real shadows** (one shadow map per painting
+would tank the fill-rate-bound scene). So the soft drop shadow under each frame's
+bottom edge is a **faked decal** (`FrameShadow` in `Painting.tsx`): a small quad on
+the wall, `CustomBlending` set to multiply (`blendSrc ZeroFactor`, `blendDst
+SrcColorFactor`) so it darkens the wall — damask and all — instead of flattening it
+to grey. (Note: three r184's `MultiplyBlending` preset needs
+`premultipliedAlpha=true` or it renders a white block; CustomBlending sidesteps
+that.) Strength + drop are tunable via `?tune` (`frameShadow` / `frameShadowDrop`).
+
+Scaling: it **auto-sizes per painting** from `pw/ph/frameWidth`, so new artworks
+and frame styles just work, and it's independent of light intensity/colour. Its one
+limitation: it always sits **directly below the frame** — it does **not** track
+light *direction*. That's an accepted call (the gallery's lights stay overhead). If
+the lighting direction ever needs to change and the shadow must follow, switch to a
+real shadow: a single shared shadow-casting light for the whole room (one shadow
+map — far cheaper than per-painting).
+
 ## 3. Resolution policy (DPR) and the inspect hitch
 
 `quality.ts` caps render DPR (the scene is fill-rate bound). **Keep inspect DPR
