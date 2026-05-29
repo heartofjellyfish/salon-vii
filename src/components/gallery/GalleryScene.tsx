@@ -1136,16 +1136,6 @@ function SceneContent({
   );
 }
 
-// Quality policy: cap render DPR while roaming, restore higher DPR when inspecting
-// a painting (static, single-subject — sharpness matters there and the cost is low).
-function DprPolicy({ inspecting, roamDpr, inspectDpr }: { inspecting: boolean; roamDpr: number; inspectDpr: number }) {
-  const setDpr = useThree((s) => s.setDpr);
-  useEffect(() => {
-    setDpr(inspecting ? inspectDpr : roamDpr);
-  }, [inspecting, roamDpr, inspectDpr, setDpr]);
-  return null;
-}
-
 export default function GalleryScene({
   artworks,
   mode,
@@ -1171,12 +1161,13 @@ export default function GalleryScene({
   return (
     <Canvas
       gl={{ antialias: true, alpha: true, toneMapping: THREE.ReinhardToneMapping, toneMappingExposure: ACTIVE_LIGHTING.exposure }}
-      // No `dpr` prop on purpose: R3F re-applies a static dpr prop on every render
-      // and would clobber the inspect-time bump. DprPolicy is the sole controller.
+      // Reactive dpr: capped while roaming, full when inspecting a work. The prop is
+      // always the desired value for the current state, so R3F's per-render dpr
+      // re-sync applies the right one (a *static* prop instead fought the change).
+      dpr={inspecting ? quality.inspectDpr : quality.roamDpr}
       shadows
       style={{ position: "fixed", inset: 0 }}
     >
-      <DprPolicy inspecting={!!inspecting} roamDpr={quality.roamDpr} inspectDpr={quality.inspectDpr} />
       <SceneContent
         artworks={artworks}
         mode={mode}
