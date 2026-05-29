@@ -34,3 +34,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# sanity studio build artifacts (lockfile IS committed, for CI npm ci)
+/sanity-studio/node_modules
+/sanity-studio/dist
+/sanity-studio/.sanity
