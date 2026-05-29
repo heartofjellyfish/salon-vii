@@ -1171,7 +1171,8 @@ export default function GalleryScene({
   return (
     <Canvas
       gl={{ antialias: true, alpha: true, toneMapping: THREE.ReinhardToneMapping, toneMappingExposure: ACTIVE_LIGHTING.exposure }}
-      dpr={quality.roamDpr}
+      // No `dpr` prop on purpose: R3F re-applies a static dpr prop on every render
+      // and would clobber the inspect-time bump. DprPolicy is the sole controller.
       shadows
       style={{ position: "fixed", inset: 0 }}
     >
