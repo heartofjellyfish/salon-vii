@@ -20,7 +20,7 @@ type R3F = {
   scene: { traverse: (cb: (o: SceneObj) => void) => void };
 };
 type SceneObj = { isSpotLight?: boolean; castShadow?: boolean; visible: boolean; userData?: { perfGroup?: string } };
-type Composer = { passes: { enabled: boolean }[]; setSize?: (w: number, h: number) => void };
+type Composer = { passes: { enabled: boolean; renderToScreen?: boolean }[]; setSize?: (w: number, h: number) => void };
 type Win = Window & {
   __galleryPerf?: PerfSnapshot;
   __r3f?: R3F;
@@ -96,6 +96,15 @@ export default function PerfOverlay() {
     };
 
     const aoPass = composer?.passes?.[1];
+    const renderPass = composer?.passes?.[0];
+    // Toggling N8AO must also flip the RenderPass to render straight to screen when
+    // AO is off — otherwise the composer's output chain breaks, the scene vanishes,
+    // fps reads fake-high, and the rows measured after it are poisoned.
+    const setAO = (on: boolean) => {
+      if (!aoPass) return;
+      aoPass.enabled = on;
+      if (renderPass) renderPass.renderToScreen = !on;
+    };
     const dprWas = gl.getPixelRatio();
     const W = window.innerWidth, H = window.innerHeight;
     const setDpr = (r: number) => { gl.setPixelRatio(r); gl.setSize(W, H, false); composer?.setSize?.(Math.round(W * r), Math.round(H * r)); };
@@ -105,7 +114,7 @@ export default function PerfOverlay() {
     const pls = find((o) => o.userData?.perfGroup === "paintingLight"); // the 9 painting spotlights
     hide(pls); await measure("− painting lights"); show(pls);
 
-    if (aoPass) { aoPass.enabled = false; await measure("− N8AO (post-fx)"); aoPass.enabled = true; }
+    if (aoPass) { setAO(false); await measure("− N8AO (post-fx)"); setAO(true); }
 
     const shadowWas = gl.shadowMap.enabled;
     gl.shadowMap.enabled = false; await measure("− shadows"); gl.shadowMap.enabled = shadowWas;
@@ -119,9 +128,9 @@ export default function PerfOverlay() {
     setDpr(1); await measure("dpr → 1 (¼ the pixels)"); setDpr(dprWas);
 
     // everything off at once — the floor
-    hide(pls); if (aoPass) aoPass.enabled = false; gl.shadowMap.enabled = false; hide(plants); hide(props); setDpr(1);
+    hide(pls); setAO(false); gl.shadowMap.enabled = false; hide(plants); hide(props); setDpr(1);
     await measure("MINIMAL (all off)");
-    show(pls); if (aoPass) aoPass.enabled = true; gl.shadowMap.enabled = shadowWas; show(plants); show(props); setDpr(dprWas);
+    show(pls); setAO(true); gl.shadowMap.enabled = shadowWas; show(plants); show(props); setDpr(dprWas);
 
     setStatus("done — screenshot the table ↓");
     setBusy(false);
