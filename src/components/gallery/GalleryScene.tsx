@@ -13,6 +13,7 @@ import Carpet from "./Carpet";
 import FloorLamp from "./FloorLamp";
 import Painting from "./Painting";
 import FloorLine from "./FloorLine";
+import { PerfProbe } from "./Perf";
 import { ACTIVE_LIGHTING } from "@/lib/lighting";
 import { getPaintingTransform, getFacingDir, HALF_W, BACK_Z, FRONT_Z } from "@/lib/gallery-config";
 import type { Artwork } from "@/lib/sanity";
@@ -1026,6 +1027,11 @@ function SceneContent({
   inspectedIndex,
 }: GallerySceneProps & { revealed: boolean }) {
   const { anchors, start } = useMemo(() => buildAnchors(artworks), [artworks]);
+  // ?ao=off disables the N8AO contact-shadow post-process — a console-free perf A/B.
+  const aoEnabled = useMemo(
+    () => (typeof window === "undefined" ? true : new URLSearchParams(window.location.search).get("ao") !== "off"),
+    [],
+  );
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, EYE_Y, -6 + VIEW_DIST]} fov={VFOV_DEG} near={0.05} far={100} />
@@ -1115,9 +1121,11 @@ function SceneContent({
       {/* Real screen-space ambient occlusion: darkens contact/occluded areas
           (under the daybed, around the legs) the way an offline render would —
           this is the computed "natural black", not a painted blob. */}
-      <EffectComposer enableNormalPass={false}>
-        <N8AO aoRadius={2.4} intensity={9} distanceFalloff={1.2} halfRes color="black" />
-      </EffectComposer>
+      {aoEnabled && (
+        <EffectComposer ref={(c) => { (window as unknown as { __composer?: unknown }).__composer = c; }} enableNormalPass={false}>
+          <N8AO aoRadius={2.4} intensity={9} distanceFalloff={1.2} halfRes color="black" />
+        </EffectComposer>
+      )}
     </>
   );
 }
@@ -1167,6 +1175,7 @@ export default function GalleryScene({
         inspecting={inspecting}
         inspectedIndex={inspectedIndex}
       />
+      <PerfProbe />
     </Canvas>
   );
 }

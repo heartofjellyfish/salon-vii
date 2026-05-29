@@ -6,6 +6,8 @@ import type { Artwork, Exhibition } from "@/lib/sanity";
 import type { InspectApi } from "@/components/gallery/GalleryScene";
 import FilmGrain from "@/components/FilmGrain";
 import { getMusic, setMusicSrc, consumeMusicArmed } from "@/lib/music";
+import PerfOverlay from "@/components/gallery/PerfOverlay";
+import { setPerfPhase } from "@/components/gallery/perf-state";
 
 const GalleryScene = dynamic(() => import("@/components/gallery/GalleryScene"), {
   ssr: false,
@@ -728,9 +730,12 @@ export default function GalleryPage() {
           viewRef={viewRef}
           inspecting={inspecting}
           inspectedIndex={inspectedIndex}
-          onPhaseChange={setControlPhase}
+          onPhaseChange={(p) => { setControlPhase(p); setPerfPhase(p); }}
         />
       )}
+
+      {/* ?perf (or backtick toggle) — standing FPS / draw-call / memory readout */}
+      <PerfOverlay />
 
       {/* Scene transition — an eyelid "eyes opening": two black lids meet at the
           centre and, once ready, retract up and down to reveal the room through a
