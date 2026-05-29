@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import type { PerfSnapshot } from "./perf-state";
+import { resolveQuality } from "@/lib/quality";
 
 // On-screen readout for the gallery performance probe. DOM-only (no three /
 // r3f imports) so it can sit in the page without pulling the 3D bundle into the
@@ -129,6 +130,8 @@ export default function PerfOverlay() {
   if (!on) return null;
   const s = (window as unknown as Win).__galleryPerf;
   const base = rows[0]?.fps ?? 0;
+  const q = resolveQuality();
+  const inspectHi = (s?.phase === "entry" || s?.phase === "cropped");
 
   return (
     <div
@@ -153,6 +156,8 @@ export default function PerfOverlay() {
         <Row label="shaders" value={`${s?.programs ?? 0}`} />
         {!!s?.heapMB && <Row label="JS heap" value={`${s.heapMB} MB`} />}
         <Row label="phase" value={s?.phase ?? "—"} />
+        <Row label="dpr" value={`${s?.dpr ?? 0}${inspectHi ? " ·inspect" : ""}`} accent={inspectHi ? "#7CFC9A" : undefined} />
+        <Row label="quality" value={q.mode} />
       </div>
 
       {diag && (

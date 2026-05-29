@@ -120,6 +120,7 @@ export function PerfProbe() {
       snapshot.geometries = info.memory.geometries;
       snapshot.textures = info.memory.textures;
       snapshot.programs = info.programs?.length ?? 0;
+      snapshot.dpr = +gl.getPixelRatio().toFixed(2);
       const mem = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory;
       snapshot.heapMB = mem ? Math.round(mem.usedJSHeapSize / 1048576) : 0;
       snapshot.phase = getPhase();

@@ -13,13 +13,14 @@ export interface PerfSnapshot {
   programs: number; // compiled shader programs
   heapMB: number;   // JS heap in MB (Chrome only; 0 elsewhere)
   phase: string;    // roam / entry / cropped — fed by the page
+  dpr: number;      // current renderer pixel ratio (quality policy)
   ts: number;
 }
 
 // The single live reading the in-canvas probe keeps current and the overlay reads.
 export const snapshot: PerfSnapshot = {
   fps: 0, fpsMin: 0, ms: 0, calls: 0, tris: 0,
-  geometries: 0, textures: 0, programs: 0, heapMB: 0, phase: "roam", ts: 0,
+  geometries: 0, textures: 0, programs: 0, heapMB: 0, phase: "roam", dpr: 0, ts: 0,
 };
 
 // The page knows the control phase (roam / entry / cropped); it pushes it here so

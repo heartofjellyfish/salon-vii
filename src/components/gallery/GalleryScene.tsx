@@ -15,6 +15,7 @@ import Painting from "./Painting";
 import FloorLine from "./FloorLine";
 import { PerfProbe } from "./Perf";
 import { ACTIVE_LIGHTING } from "@/lib/lighting";
+import { resolveQuality } from "@/lib/quality";
 import { getPaintingTransform, getFacingDir, HALF_W, BACK_Z, FRONT_Z } from "@/lib/gallery-config";
 import type { Artwork } from "@/lib/sanity";
 
@@ -1135,6 +1136,16 @@ function SceneContent({
   );
 }
 
+// Quality policy: cap render DPR while roaming, restore higher DPR when inspecting
+// a painting (static, single-subject — sharpness matters there and the cost is low).
+function DprPolicy({ inspecting, roamDpr, inspectDpr }: { inspecting: boolean; roamDpr: number; inspectDpr: number }) {
+  const setDpr = useThree((s) => s.setDpr);
+  useEffect(() => {
+    setDpr(inspecting ? inspectDpr : roamDpr);
+  }, [inspecting, roamDpr, inspectDpr, setDpr]);
+  return null;
+}
+
 export default function GalleryScene({
   artworks,
   mode,
@@ -1152,6 +1163,7 @@ export default function GalleryScene({
   inspectedIndex,
 }: GallerySceneProps) {
   const [revealed, setRevealed] = useState(false);
+  const quality = useMemo(() => resolveQuality(), []);
   const handleReady = useCallback(() => {
     setRevealed(true);
     onReady?.();
@@ -1159,10 +1171,11 @@ export default function GalleryScene({
   return (
     <Canvas
       gl={{ antialias: true, alpha: true, toneMapping: THREE.ReinhardToneMapping, toneMappingExposure: ACTIVE_LIGHTING.exposure }}
-      dpr={[1, 2]}
+      dpr={quality.roamDpr}
       shadows
       style={{ position: "fixed", inset: 0 }}
     >
+      <DprPolicy inspecting={!!inspecting} roamDpr={quality.roamDpr} inspectDpr={quality.inspectDpr} />
       <SceneContent
         artworks={artworks}
         mode={mode}
