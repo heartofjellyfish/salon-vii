@@ -33,6 +33,14 @@ export default function TuningPanel() {
     "Plants / 植物灯": folder({
       plantFill: { value: TUNING_DEFAULTS.plantFill, min: 0, max: 25, step: 0.5 },
     }),
+    "Lamp / 落地灯": folder({
+      lampTilt: { value: TUNING_DEFAULTS.lampTilt, min: -0.5, max: 0.5, step: 0.01 },
+      lampGlowX: { value: TUNING_DEFAULTS.lampGlowX, min: -0.3, max: 0.3, step: 0.005 },
+      lampGlowY: { value: TUNING_DEFAULTS.lampGlowY, min: -0.3, max: 0.3, step: 0.005 },
+      lampGlowZ: { value: TUNING_DEFAULTS.lampGlowZ, min: -0.3, max: 0.3, step: 0.005 },
+      lampGlowSize: { value: TUNING_DEFAULTS.lampGlowSize, min: 0.01, max: 0.2, step: 0.005 },
+      lampGlowIntensity: { value: TUNING_DEFAULTS.lampGlowIntensity, min: 0, max: 8, step: 0.1 },
+    }),
   });
 
   useEffect(() => {

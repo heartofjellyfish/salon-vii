@@ -20,6 +20,16 @@ export interface Tuning {
   plantFill: number; // plant corner fill-light intensity
   frameShadow: number; // faked drop-shadow strength under each frame's bottom edge
   frameShadowDrop: number; // how far that shadow falls below the frame (m)
+  // Floor lamp: a soft warm "patch of light" sits inside the metal dome. The dome
+  // opens downward, so tilt the lamp a touch (lampTilt) to angle the opening toward
+  // the viewer, then nudge the glow (offset from the shade centre) so it's glimpsed
+  // through the opening. Tunable live because the right spot depends on the model.
+  lampTilt: number; // pitch the whole lamp toward the viewer (rad)
+  lampGlowX: number; // glow offset from shade centre (m)
+  lampGlowY: number;
+  lampGlowZ: number;
+  lampGlowSize: number; // glow sphere radius (m)
+  lampGlowIntensity: number; // glow emissive strength
 }
 
 export const TUNING_DEFAULTS: Tuning = {
@@ -35,6 +45,12 @@ export const TUNING_DEFAULTS: Tuning = {
   plantFill: 1.5,
   frameShadow: 1.0,
   frameShadowDrop: 0.18,
+  lampTilt: -0.02,
+  lampGlowX: 0,
+  lampGlowY: -0.045,
+  lampGlowZ: 0,
+  lampGlowSize: 0.055,
+  lampGlowIntensity: 2,
 };
 
 export const useTuningStore = create<Tuning & { set: (patch: Partial<Tuning>) => void }>((set) => ({

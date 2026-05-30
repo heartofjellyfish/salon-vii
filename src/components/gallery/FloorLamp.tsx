@@ -3,11 +3,14 @@
 import { useMemo } from "react";
 import { useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import { useTuningStore } from "./tuningStore";
 
-// Floor lamp beside the daybed. It does double duty: the fabric shade is made
-// to glow warm (so the lamp reads as "on"), and a warm point light at the shade
-// throws the cosy pool the evening room is built around. Auto-fit like the other
-// props: stand the tallest axis up, scale to a real height, seat on the floor.
+// Floor lamp beside the daybed. The shade interior glows warm and a warm point
+// light at the shade throws the cosy pool. A small soft "patch of light" sits
+// inside the metal dome; because the dome opens downward, tilt the lamp a touch
+// to angle the opening toward the viewer — all live in ?tune ("Lamp / 落地灯").
+// Auto-fit like the other props: stand the tallest axis up, scale to a real
+// height, seat on the floor.
 const MODEL_URL = "/models/brass_lamp.glb";
 const TARGET_H = 1.7; // metres tall
 
@@ -36,11 +39,11 @@ function useFittedLamp() {
     o.position.z -= center.z;
     o.position.y -= box.min.y;
 
-    // Glow the fabric shade and remember where it sits, so the lamp's light can
-    // be placed at the shade (this is an arc lamp — the shade is offset from the
-    // base, so a base-centred light would miss it).
+    // The parts tucked inside the metal dome (Material + mirror.001) glow a soft
+    // warm, so when the opening faces you the shade interior reads as a patch of
+    // light. The dome shell (Latun) is solid metal — left as-is. Emissive only.
     const glow = new THREE.Color("#ff9d4d");
-    let shade: THREE.Mesh | null = null;
+    let shade: THREE.Mesh | null = null; // mirror.001 = the reflector disc inside the dome
     o.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -48,16 +51,20 @@ function useFittedLamp() {
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       mats.forEach((m) => {
         const mat = m as THREE.MeshStandardMaterial;
-        if (mat && /fabric|shade|bulb|glass|material/i.test(mat.name)) {
+        if (!mat) return;
+        if (mat.name === "Material" || mat.name === "mirror.001") {
           mat.emissive = glow.clone();
-          mat.emissiveIntensity = 1.5;
+          mat.emissiveIntensity = 2;
+          mat.metalness = 0;
           mat.needsUpdate = true;
-          shade = mesh;
+          if (mat.name === "mirror.001") shade = mesh;
         }
       });
     });
 
-    // shade centre in group space (the object's offsets are already applied)
+    // shade centre in group space — the reflector disc's world bbox centre is the
+    // dome's interior, the right anchor for the lamp's light + interior glow.
+    o.updateMatrixWorld(true);
     const shadePos = new THREE.Vector3(0, TARGET_H * 0.8, 0);
     if (shade) new THREE.Box3().setFromObject(shade).getCenter(shadePos);
 
@@ -75,8 +82,14 @@ export default function FloorLamp({
   pointIntensity?: number;
 }) {
   const { object, shadePos } = useFittedLamp();
+  const tilt = useTuningStore((s) => s.lampTilt);
+  const glowX = useTuningStore((s) => s.lampGlowX);
+  const glowY = useTuningStore((s) => s.lampGlowY);
+  const glowZ = useTuningStore((s) => s.lampGlowZ);
+  const glowSize = useTuningStore((s) => s.lampGlowSize);
+  const glowIntensity = useTuningStore((s) => s.lampGlowIntensity);
   return (
-    <group position={position} rotation={[0, rotationY, 0]}>
+    <group position={position} rotation={[tilt, rotationY, 0]}>
       <primitive object={object} />
       {/* warm pool thrown from the shade */}
       <pointLight
@@ -87,6 +100,12 @@ export default function FloorLamp({
         color="#ffb866"
         castShadow={false}
       />
+      {/* soft patch of light inside the shade — offset/size/brightness live in the
+          ?tune panel so it can be nudged to peek through the dome opening */}
+      <mesh position={[shadePos[0] + glowX, shadePos[1] + glowY, shadePos[2] + glowZ]}>
+        <sphereGeometry args={[glowSize, 20, 20]} />
+        <meshStandardMaterial color="#000000" emissive="#ffc070" emissiveIntensity={glowIntensity} />
+      </mesh>
     </group>
   );
 }
