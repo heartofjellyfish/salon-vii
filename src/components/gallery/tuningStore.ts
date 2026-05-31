@@ -30,6 +30,15 @@ export interface Tuning {
   lampGlowZ: number;
   lampGlowSize: number; // glow sphere radius (m)
   lampGlowIntensity: number; // glow emissive strength
+  // --- Sky (celestial dome) -------------------------------------------------
+  skyFlowSpeed: number; // how fast the curl flow-field churns the clouds
+  skyFlowAmount: number; // how far clouds are dragged along the flow (turbulence)
+  skySwirl: number; // residual global Starry-Night spiral on top of the flow
+  skyParallax: number; // blend of the deeper 2nd cloud layer (0 = single layer)
+  skyLayer2Scale: number; // scale of the deeper cloud layer (>1 = larger/further)
+  skyStarThreshold: number; // star cell cutoff; lower = more stars (0.6..0.95)
+  skyNightMix: number; // 0 = bright cloud swirl, 1 = dark realistic starfield
+  skyIridescence: number; // dreamy indigo↔magenta hue drift in the night clouds
 }
 
 export const TUNING_DEFAULTS: Tuning = {
@@ -51,6 +60,14 @@ export const TUNING_DEFAULTS: Tuning = {
   lampGlowZ: 0,
   lampGlowSize: 0.055,
   lampGlowIntensity: 2,
+  skyFlowSpeed: 0.12,
+  skyFlowAmount: 0.07,
+  skySwirl: 0.35,
+  skyParallax: 0.35,
+  skyLayer2Scale: 1.35,
+  skyStarThreshold: 0.80,
+  skyNightMix: 0.94,
+  skyIridescence: 0.27,
 };
 
 export const useTuningStore = create<Tuning & { set: (patch: Partial<Tuning>) => void }>((set) => ({

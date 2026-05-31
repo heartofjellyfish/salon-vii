@@ -41,6 +41,16 @@ export default function TuningPanel() {
       lampGlowSize: { value: TUNING_DEFAULTS.lampGlowSize, min: 0.01, max: 0.2, step: 0.005 },
       lampGlowIntensity: { value: TUNING_DEFAULTS.lampGlowIntensity, min: 0, max: 8, step: 0.1 },
     }),
+    "Sky / 天空": folder({
+      skyNightMix: { value: TUNING_DEFAULTS.skyNightMix, min: 0, max: 1, step: 0.01 },
+      skyIridescence: { value: TUNING_DEFAULTS.skyIridescence, min: 0, max: 1, step: 0.01 },
+      skyFlowSpeed: { value: TUNING_DEFAULTS.skyFlowSpeed, min: 0, max: 0.6, step: 0.01 },
+      skyFlowAmount: { value: TUNING_DEFAULTS.skyFlowAmount, min: 0, max: 0.2, step: 0.005 },
+      skySwirl: { value: TUNING_DEFAULTS.skySwirl, min: 0, max: 1.2, step: 0.01 },
+      skyParallax: { value: TUNING_DEFAULTS.skyParallax, min: 0, max: 1, step: 0.01 },
+      skyLayer2Scale: { value: TUNING_DEFAULTS.skyLayer2Scale, min: 0.8, max: 2.0, step: 0.01 },
+      skyStarThreshold: { value: TUNING_DEFAULTS.skyStarThreshold, min: 0.6, max: 0.95, step: 0.005 },
+    }),
   });
 
   useEffect(() => {
