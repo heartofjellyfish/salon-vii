@@ -1220,7 +1220,7 @@ export default function GalleryScene({
     <>
       {showTune && <TuningPanel />}
       <Canvas
-      gl={{ antialias: true, alpha: true, toneMapping: THREE.ReinhardToneMapping, toneMappingExposure: ACTIVE_LIGHTING.exposure }}
+      gl={{ antialias: true, alpha: true, toneMapping: THREE.LinearToneMapping, toneMappingExposure: ACTIVE_LIGHTING.exposure }}
       // Reactive dpr: capped while roaming, full when inspecting a work. The prop is
       // always the desired value for the current state, so R3F's per-render dpr
       // re-sync applies the right one (a *static* prop instead fought the change).

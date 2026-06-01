@@ -7,7 +7,7 @@
 > per frame. Three pillars, each replacing a real-time cost with a baked/painted one:
 >   1. **Lightmaps** capture the picture-light pools → walls/floor draw unlit (§1–§2).
 >   2. **Static shadow decals** replace real-time screen-space AO (N8AO is gone) (§3).
->   3. **Tone-mapping discipline**: one Reinhard exposure; know what is and isn't tone-mapped (§4).
+>   3. **Tone-mapping discipline**: one Linear exposure (saturation!); know what isn't tone-mapped (§4).
 >
 > Read this before touching `LightmapBake.tsx`, `lightmapStore.ts`, `BakedMesh.tsx`, the
 > `*Shadow.tsx` decals, the picture-light / frame / nameplate / crown materials, or
@@ -44,7 +44,7 @@ keyed by surface id), `BakedMesh.tsx` (a plane that is `MeshStandard` until bake
 ## 3. Static shadow decals — the AO replacement (N8AO is removed)
 
 Real-time **N8AO cost ~13 ms/frame** on a mid GPU (over half the budget; prod 21.5→8.3 ms
-when off), doubled draw calls via its normal pass, **bypassed Reinhard so the scene rendered
+when off), doubled draw calls via its normal pass, **bypassed tone-mapping so the scene rendered
 too bright** (see §4), grained the edges, and **darkened the artwork**. Every shadow it drew is
 static, so we paint each one once as a **multiply-blend decal** and deleted the EffectComposer.
 (`?ao=on` still mounts it as a live A/B reference; default off.)
@@ -74,15 +74,23 @@ the ceiling side of that seam needs its own decal.
 
 ## 4. Brightness & tone-mapping (the trap that made the room "too bright/too dark")
 
-The renderer uses **Reinhard** tone-mapping with one `exposure` (`ACTIVE_LIGHTING.exposure`,
-live via `?tune` Mood → exposure). Two hard-won facts:
+The renderer uses **`LinearToneMapping`** with one `exposure` (`ACTIVE_LIGHTING.exposure`, live
+via `?tune` Mood → exposure). Three hard-won facts:
 
-- **An `EffectComposer` with no `ToneMappingEffect` bypasses Reinhard.** While N8AO's composer
-  was mounted, the whole scene rendered un-tone-mapped → **~1.3× brighter**. People got used to
-  that look. Deleting the composer restored Reinhard (darker); to keep the brightness we **re-
-  baked it into exposure (0.4 → 1.05)**, calibrated by matching the **wall mid-tone luminance**
-  to the `?ao=on` reference (full-frame mean under-reads, because the bright version clips
-  highlights). Lesson: if you add/remove postprocessing, re-check exposure.
+- **An `EffectComposer` with no `ToneMappingEffect` bypasses tone-mapping.** While N8AO's
+  composer was mounted, the whole scene rendered un-tone-mapped → brighter **and fully
+  saturated**. People got used to that look. Deleting the composer restored the renderer's
+  tone-mapping. Lesson: if you add/remove postprocessing, re-check both brightness and colour.
+- **Reinhard desaturates; use `LinearToneMapping` to match the old look.** Reinhard is
+  **per-channel** `c/(1+c)` — as a colour brightens, its strong channel saturates toward 1
+  while the others keep rising, pulling the pixel toward grey. Matching brightness by *raising*
+  Reinhard exposure pushed more of the frame into that compressed region → visibly **lost
+  saturation**. `LinearToneMapping` is `exposure × colour` then clip — a **uniform scale that
+  preserves hue/saturation** (chroma only shifts once a channel clips), exactly like the old
+  un-tone-mapped composer. At **exposure 1.0** both the wall **luminance and chroma** match the
+  `?ao=on` reference (measured wallM L21.4/C38.1). Trade-off: Linear clips bright highlights
+  (no rolloff) — but the old composer did too, so it's faithful. (If clipping ever bites, the
+  fix is a custom **luminance-only Reinhard** that tone-maps luma and keeps chroma.)
 - **`toneMapped: false` materials ignore exposure entirely.** The gilt frames, the gold
   ring/crown moulding, and the cove light strip are unlit photo/additive materials output raw.
   So when the walls got brighter (exposure ↑), the crown moulding stayed put and read
@@ -101,8 +109,11 @@ live via `?tune` Mood → exposure). Two hard-won facts:
 3. **Shadow decals:** place `ContactShadow` under each freestanding object, one `WallShadow` per
    wall (matched size/position, nudged into the room, `renderOrder = -1` so props/plants composite
    over it — see pit #11), and two `PerimeterShadow`s (under the ceiling, above the floor).
-4. **Brightness:** set the room's `exposure` in `src/lib/lighting.ts`; add a brightness knob for
-   any `toneMapped:false` decoration (crown, etc.) that should track the walls.
+4. **Brightness & colour:** keep the Canvas on **`LinearToneMapping`** (NOT Reinhard — it
+   desaturates, see §4) and set the room's `exposure` in `src/lib/lighting.ts`. Tune exposure by
+   matching the wall **luminance *and* chroma** to the `?ao=on` reference (they move together
+   under Linear). Add a brightness knob for any `toneMapped:false` decoration (crown, etc.) that
+   should track the walls.
 5. **Tune by hand:** every shadow/brightness value is a live `?tune` knob (folders: Mood, Sofa
    shadow, Wall shadows). Dial against `?ao=on` (the old AO look) or by eye, then bake the values
    into `TUNING_DEFAULTS`. The store reads identical to those defaults when the panel is absent,
@@ -115,7 +126,7 @@ live via `?tune` Mood → exposure). Two hard-won facts:
    without it the pool reads ~3× too dim.
 2. **Colour space.** Bake with `NoToneMapping` + RT as `LinearSRGBColorSpace` → you capture
    **linear irradiance**. The unlit wall (`MeshBasic`, `toneMapped: true`) re-applies the room's
-   exposure+Reinhard. Don't bake albedo into the lightmap or it goes soft.
+   exposure (Linear tone-map). Don't bake albedo into the lightmap or it goes soft.
 3. **three light layers test against the CAMERA only — there is NO per-object light masking.**
    You cannot make a light "illuminate only the frames, not the walls." A whole reverted attempt
    died on this. Verified in three r184 source.
