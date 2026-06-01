@@ -1,6 +1,13 @@
 # Lightmap baking — gallery lighting (design, recipe, and the pits we fell into)
 
-> _Last updated: 2026-05-31._
+> _Last updated: 2026-06-01._
+>
+> **Prod-critical (2026-06-01):** the in-browser baker is **always mounted** now — it is no
+> longer gated behind `?lightbake`. It used to be, which meant **production never baked**:
+> every visitor ran all 9 picture spotlights and sat at ~10 fps on a mid GPU (the spots are
+> the scene's #1 cost). Now every load bakes once (a cheap burst of ortho renders under the
+> reveal overlay), then drops the spots. This is option **A** below; option **B** (ship
+> pre-baked PNGs, zero per-load cost) is still the endgame (§6).
 > Read this before touching `LightmapBake.tsx`, `lightmapStore.ts`, `BakedMesh.tsx`, or
 > the picture-light / frame / nameplate materials. It is the distilled result of a long,
 > painful session — every gotcha below cost real time to find. New galleries should reuse
@@ -37,9 +44,9 @@ Pieces:
 
 1. Build walls/floor with `<BakedMesh id="…" width height map …/>` (planes; their own 0..1
    UV is the lightmap UV — no unwrap needed). Tag = `userData={{ lightbake: id }}`.
-2. Mount `<LightmapBake/>` (gated by `?lightbake`). It polls until the surfaces' albedo has
-   loaded **and the picture spots are aimed** (see pit #5), then bakes each once and
-   publishes a `lightMap` to the store.
+2. Mount `<LightmapBake/>` (now **always mounted**, not gated — see the prod note up top).
+   It polls until the surfaces' albedo has loaded **and the picture spots are aimed** (see
+   pit #5), then bakes each once and publishes a `lightMap` to the store.
 3. `BakedMesh` swaps to `MeshBasic(map × lightMap, lightMapIntensity = π)` when its lightmap
    appears. The real picture lights render until `store.baked`, then drop (`Painting` gates
    `<PaintingLighting>`/`<FloorWash>` on `!lmBaked`).
@@ -84,9 +91,13 @@ Pieces:
    - **Nameplate (brass)**: keep it a **lit `MeshStandard`** (envMap reflection = sheen,
      normalMap = engraving relief) + a soft top-shade painted into the texture. Baking it
      unlit made it flat/pale. `nameplateBrightness` (envMapIntensity) is a live knob.
-9. **N8AO is the source of the grain/shimmer.** It's a real-time screen-space AO. Quick fix:
-   `quality="high"` + `halfRes={false}`. Proper fix (endgame): bake AO into the lightmaps and
-   **drop N8AO entirely** (smooth, static, free, and it stops darkening the art).
+9. **N8AO is the source of the grain/shimmer.** It's a real-time screen-space AO, and it is
+   **expensive**: measured on prod (baked scene) at `quality="high"` + `halfRes={false}` it
+   cost ~11 ms/frame (8.3 → 19.5 ms) — over half the frame budget, and its normal-pass
+   doubles draw calls + triangles. We tried `halfRes` to reclaim ~half of that, but the
+   upsampled AO had **visibly grainy/ragged edges**, so we kept `quality="high"` +
+   `halfRes={false}` (full-res). The cost stays — the real win is the endgame: bake AO into
+   the lightmaps and **drop N8AO entirely** (smooth, static, free, stops darkening the art).
 
 ## 5. Verification gotchas (for agents)
 
@@ -108,9 +119,12 @@ Pieces:
 - **Bake AO + contact shadows into the lightmaps** (accumulate a hemisphere of shadow
   lights, one at a time per pit #4) → drop real-time **N8AO** and the faked `FrameShadow`
   decal. Removes the grain, the "N8AO darkens the art" problem, and a per-frame cost.
-- **Bake-once → ship the texture.** Currently re-bakes at every load (a few seconds). Bake
-  in dev, export the lightmap PNGs to `/public`, load them in prod (set `store.baked` on
-  load) → zero visitor bake cost, and the picture lights never need to exist in prod.
+- **Bake-once → ship the texture (option B, the real endgame).** We currently re-bake at
+  every load (option A: cheap, but the 9 spots must exist + render until the bake fires, and
+  we redo it every visit). Better: bake in dev, export the lightmap PNGs to `/public`, load
+  them in prod (set `store.baked` on load) → zero visitor bake cost, and the picture lights
+  never need to exist in prod. Watch the 8-bit **linear** color-space pit when encoding PNGs
+  (the RTs are `LinearSRGBColorSpace`; load back with the same, don't let the decoder sRGB it).
 - **Non-planar geometry** (curved walls, furniture, plants) needs a `uv2` unwrap (xatlas) to
   be lightmapped. Walls/floor are planes, so they don't.
 - Package as a reusable `<BakedRoom>` wrapper once the above settle.

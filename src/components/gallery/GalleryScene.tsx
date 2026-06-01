@@ -1142,9 +1142,10 @@ function SceneContent({
           this is the computed "natural black", not a painted blob. */}
       {aoEnabled && (
         <EffectComposer ref={(c) => { (window as unknown as { __composer?: unknown }).__composer = c; }} enableNormalPass>
-          {/* quality="high" (64 samples) + full-res kills the grain/shimmer; the dark-walls
-              regression we feared from this was actually the bake-timing bug, now fixed.
-              Endgame: bake AO into the lightmaps and drop N8AO entirely (see LIGHTBAKE.md). */}
+          {/* quality="high" + full-res: halfRes was tried for perf (~11ms→~half) but its
+              upsampled AO had visibly grainy/ragged edges, so we keep full-res. The AO pass
+              is still ~11ms (prod, baked scene: 8.3→19.5ms) — the real fix is the endgame:
+              bake AO into the lightmaps and drop N8AO entirely (see LIGHTBAKE.md §6). */}
           <N8AO aoRadius={aoRadius} intensity={inspecting ? 0 : aoIntensity} distanceFalloff={1} color="black" quality="high" halfRes={false} />
         </EffectComposer>
       )}
@@ -1172,11 +1173,6 @@ export default function GalleryScene({
   const quality = useMemo(() => resolveQuality(), []);
   const showTune = useMemo(
     () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("tune"),
-    [],
-  );
-  // ?lightbake — run the in-browser lightmap baker (walls/floor → unlit + lightMap).
-  const lightbake = useMemo(
-    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("lightbake"),
     [],
   );
   const handleReady = useCallback(() => {
@@ -1213,7 +1209,10 @@ export default function GalleryScene({
         inspectedIndex={inspectedIndex}
       />
       <PerfProbe />
-      {lightbake && <LightmapBake />}
+      {/* Always-on in-browser lightmap baker: bakes the walls/floor lighting once on
+          load, then drops the 9 picture spotlights (the scene's #1 GPU cost). Previously
+          gated behind ?lightbake, so prod never baked and ran all 9 spots — 10fps. */}
+      <LightmapBake />
       </Canvas>
     </>
   );
