@@ -1142,7 +1142,10 @@ function SceneContent({
           this is the computed "natural black", not a painted blob. */}
       {aoEnabled && (
         <EffectComposer ref={(c) => { (window as unknown as { __composer?: unknown }).__composer = c; }} enableNormalPass>
-          <N8AO aoRadius={aoRadius} intensity={inspecting ? 0 : aoIntensity} distanceFalloff={1} color="black" />
+          {/* quality="high" (64 samples) + full-res kills the grain/shimmer; the dark-walls
+              regression we feared from this was actually the bake-timing bug, now fixed.
+              Endgame: bake AO into the lightmaps and drop N8AO entirely (see LIGHTBAKE.md). */}
+          <N8AO aoRadius={aoRadius} intensity={inspecting ? 0 : aoIntensity} distanceFalloff={1} color="black" quality="high" halfRes={false} />
         </EffectComposer>
       )}
     </>
