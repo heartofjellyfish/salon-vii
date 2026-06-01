@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { Leva, useControls, folder } from "leva";
+import { Leva, useControls, folder, button } from "leva";
 import { useTuningStore, TUNING_DEFAULTS } from "./tuningStore";
 
 // Live lighting/AO tuning GUI. Only mounted when the URL has ?tune (gated by the
@@ -29,6 +29,14 @@ export default function TuningPanel() {
     "Contact AO / 接触阴影": folder({
       aoIntensity: { value: TUNING_DEFAULTS.aoIntensity, min: 0, max: 12, step: 0.1 },
       aoRadius: { value: TUNING_DEFAULTS.aoRadius, min: 0.2, max: 2.5, step: 0.05 },
+    }),
+    // ?lightbake only. floorWash + the picture-light values are BAKED into the lightmaps,
+    // so changing them does nothing until you press Re-bake. nameplateBrightness is LIVE.
+    "Bake / 烘焙 (改完点重烤)": folder({
+      floorWash: { value: TUNING_DEFAULTS.floorWash, min: 0, max: 12, step: 0.1 },
+      floorWashAngle: { value: TUNING_DEFAULTS.floorWashAngle, min: 0.15, max: 0.7, step: 0.01 },
+      nameplateBrightness: { value: TUNING_DEFAULTS.nameplateBrightness, min: 0, max: 3, step: 0.05 },
+      "重新烘焙 / Re-bake": button(() => (window as unknown as { __rebake?: () => void }).__rebake?.()),
     }),
     "Plants / 植物灯": folder({
       plantFill: { value: TUNING_DEFAULTS.plantFill, min: 0, max: 25, step: 0.5 },

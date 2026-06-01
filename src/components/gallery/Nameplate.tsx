@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { getFrameEnvMap, getFrameWidth } from "./FrameBuilders";
+import { useTuningStore } from "./tuningStore";
 import type { Artwork } from "@/lib/sanity";
 
 const PLATE_SRC = "/frames/nameplate.png";
@@ -59,30 +60,31 @@ function drawText(ctx: CanvasRenderingContext2D, title: string, sub: string, ink
 
 export default function Nameplate({ artwork, ph, onClick }: { artwork: Artwork; ph: number; onClick?: () => void }) {
   const gl = useThree((s) => s.gl);
+  const brightness = useTuningStore((s) => s.nameplateBrightness); // live ?tune knob
   const [material, setMaterial] = useState<THREE.MeshStandardMaterial | null>(null);
 
   const title = artwork.titleCN || artwork.title || "";
   const sub = [artwork.artist || "Vincent van Gogh", artwork.year].filter(Boolean).join(" · ");
 
+  // A brass plaque is METALLIC — it must reflect the room and carry its engraving
+  // relief, or it reads fake (baking it unlit lost both → flat/pale). So keep it a lit
+  // MeshStandard (envMap = reflection/sheen, normalMap = engraving), and paint a soft
+  // top-down shade into the texture for the "sits just under the frame" cast-shadow feel.
   useEffect(() => {
     let disposed = false;
     const img = new Image();
     img.onload = () => {
       if (disposed) return;
-      // Colour map = photo + engraved text painted into the flat field.
       const base = document.createElement("canvas");
       base.width = IMG_W;
       base.height = IMG_H;
       const b = base.getContext("2d")!;
       b.drawImage(img, 0, 0, IMG_W, IMG_H);
       drawText(b, title, sub, "rgba(70,48,18,0.9)");
-      // The frame casts a top-down shadow onto the wall just below it; the
-      // plaque sits in that band, so darken it (strongest at the top edge,
-      // fading down) instead of letting its sheen pop out of the shade.
       const shade = b.createLinearGradient(0, 0, 0, IMG_H);
-      shade.addColorStop(0, "rgba(0,0,0,0.55)");
-      shade.addColorStop(1, "rgba(0,0,0,0.18)");
-      b.globalCompositeOperation = "source-atop"; // darken only the plate, keep corners transparent
+      shade.addColorStop(0, "rgba(0,0,0,0.32)"); // soft, not the old heavy 0.55
+      shade.addColorStop(1, "rgba(0,0,0,0.04)");
+      b.globalCompositeOperation = "source-atop";
       b.fillStyle = shade;
       b.fillRect(0, 0, IMG_W, IMG_H);
       b.globalCompositeOperation = "source-over";
@@ -90,8 +92,6 @@ export default function Nameplate({ artwork, ph, onClick }: { artwork: Artwork; 
       colorTex.colorSpace = THREE.SRGBColorSpace;
       colorTex.anisotropy = gl.capabilities.getMaxAnisotropy();
 
-      // Height field = flat plate with recessed (dark) text -> normal map so the
-      // lettering catches the painting spotlights.
       const hc = document.createElement("canvas");
       hc.width = IMG_W;
       hc.height = IMG_H;
@@ -109,18 +109,22 @@ export default function Nameplate({ artwork, ph, onClick }: { artwork: Artwork; 
           normalScale: new THREE.Vector2(0.5, 0.5),
           transparent: true,
           alphaTest: 0.5,
-          metalness: 0.45,
-          roughness: 0.58,
+          metalness: 0.5,
+          roughness: 0.5,
           envMap: getFrameEnvMap(gl),
-          envMapIntensity: 0.35,
+          envMapIntensity: brightness, // catch the warm room reflection (live ?tune)
         })
       );
     };
     img.src = PLATE_SRC;
-    return () => {
-      disposed = true;
-    };
+    return () => { disposed = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- brightness updated live below, not a rebuild trigger
   }, [title, sub, gl]);
+
+  // Live brightness: update the reflection strength without rebuilding the material.
+  useEffect(() => {
+    if (material) material.envMapIntensity = brightness;
+  }, [material, brightness]);
 
   if (!material) return null;
 

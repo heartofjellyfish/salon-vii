@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import CelestialSalonCeiling from "./CelestialSalonCeiling";
+import BakedMesh from "./BakedMesh";
 
 const W = 12, H = 4, D = 8;
 const HALF_W = W / 2;
@@ -49,40 +50,23 @@ export default function Room({ paused = false }: { paused?: boolean }) {
 
   return (
     <group>
-      {/* Floor — wood parquet */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, ROOM_CENTER_Z]} receiveShadow>
-        <planeGeometry args={[W, D]} />
-        <meshStandardMaterial map={floorTex} roughness={0.7} metalness={0} />
-      </mesh>
+      {/* Floor — wood parquet (lightbaked: holds the picture-light pool that spills
+          onto the floor below each work) */}
+      <BakedMesh id="floor" width={W} height={D} map={floorTex} roughness={0.7}
+        position={[0, 0, ROOM_CENTER_Z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow />
 
       {/* Celestial oculus ceiling: warm ivory ceiling with a big oval opening onto
           a living, swirling Van-Gogh sky, framed by a gilt ring; photographic
           crown moulding + warm cove. Animation freezes while inspecting. */}
       <CelestialSalonCeiling roomWidth={W} roomDepth={D} ceilingY={H} centerZ={ROOM_CENTER_Z} paused={paused} />
 
-      {/* Back wall (north) */}
-      <mesh position={[0, H / 2, BACK_Z]} receiveShadow>
-        <planeGeometry args={[W, H]} />
-        <meshStandardMaterial map={wideWall} roughness={0.85} />
-      </mesh>
-
-      {/* Front wall (south) */}
-      <mesh position={[0, H / 2, FRONT_Z]} rotation={[0, Math.PI, 0]}>
-        <planeGeometry args={[W, H]} />
-        <meshStandardMaterial map={wideWall} roughness={0.85} />
-      </mesh>
-
-      {/* Left wall (west) */}
-      <mesh position={[-HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[D, H]} />
-        <meshStandardMaterial map={sideWall} roughness={0.85} />
-      </mesh>
-
-      {/* Right wall (east) */}
-      <mesh position={[HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[D, H]} />
-        <meshStandardMaterial map={sideWall} roughness={0.85} />
-      </mesh>
+      {/* Walls — each lightbaked (unlit MeshBasic + baked lightMap once the baker runs).
+          The picture-light pools live in these lightmaps; the wallpaper stays crisp via
+          its own tiling map. */}
+      <BakedMesh id="wall-north" width={W} height={H} map={wideWall} position={[0, H / 2, BACK_Z]} receiveShadow />
+      <BakedMesh id="wall-south" width={W} height={H} map={wideWall} position={[0, H / 2, FRONT_Z]} rotation={[0, Math.PI, 0]} />
+      <BakedMesh id="wall-west" width={D} height={H} map={sideWall} position={[-HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, Math.PI / 2, 0]} receiveShadow />
+      <BakedMesh id="wall-east" width={D} height={H} map={sideWall} position={[HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, -Math.PI / 2, 0]} receiveShadow />
 
       {/* Baseboards — all four walls */}
       <mesh position={[0, 0.1, BACK_Z + 0.05]} receiveShadow><boxGeometry args={[W, 0.2, 0.1]} /><meshStandardMaterial color="#2e2014" roughness={0.7} /></mesh>

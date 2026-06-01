@@ -17,6 +17,9 @@ export interface Tuning {
   spotAngle: number; // picture-light cone half-angle (rad) — pool size
   spotPenumbra: number; // picture-light edge softness 0..1
   spotColor: string;
+  floorWash: number; // bake-time downward pool on the floor below each work (0 = none) — BAKED, needs re-bake
+  floorWashAngle: number; // floor pool size (spot cone half-angle, rad) — BAKED, needs re-bake
+  nameplateBrightness: number; // plaque envMap reflection intensity — LIVE
   plantFill: number; // plant corner fill-light intensity
   frameShadow: number; // faked drop-shadow strength under each frame's bottom edge
   frameShadowDrop: number; // how far that shadow falls below the frame (m)
@@ -39,6 +42,7 @@ export interface Tuning {
   skyStarThreshold: number; // star cell cutoff; lower = more stars (0.6..0.95)
   skyNightMix: number; // 0 = bright cloud swirl, 1 = dark realistic starfield
   skyIridescence: number; // dreamy indigo↔magenta hue drift in the night clouds
+  bakePool: boolean; // bake the picture-light into a wall decal + frame-glint, drop the real SpotLights
 }
 
 export const TUNING_DEFAULTS: Tuning = {
@@ -51,6 +55,9 @@ export const TUNING_DEFAULTS: Tuning = {
   spotAngle: 0.61,
   spotPenumbra: 1.0,
   spotColor: ACTIVE_LIGHTING.accent.color,
+  floorWash: 2.5,
+  floorWashAngle: 0.34,
+  nameplateBrightness: 1.4,
   plantFill: 1.5,
   frameShadow: 1.0,
   frameShadowDrop: 0.18,
@@ -68,9 +75,20 @@ export const TUNING_DEFAULTS: Tuning = {
   skyStarThreshold: 0.80,
   skyNightMix: 0.94,
   skyIridescence: 0.27,
+  bakePool: false,
 };
+
+// `?bake` flips the bake on at load; otherwise default (real lights). Runtime
+// toggleable for an A/B: `window.__tuning.setState({ bakePool: true|false })`.
+const initialBake =
+  typeof window !== "undefined" && new URLSearchParams(window.location.search).has("bake");
 
 export const useTuningStore = create<Tuning & { set: (patch: Partial<Tuning>) => void }>((set) => ({
   ...TUNING_DEFAULTS,
+  bakePool: initialBake,
   set: (patch) => set(patch),
 }));
+
+if (typeof window !== "undefined") {
+  (window as unknown as { __tuning?: typeof useTuningStore }).__tuning = useTuningStore;
+}

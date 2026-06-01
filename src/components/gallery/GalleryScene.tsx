@@ -13,6 +13,7 @@ import Plant from "./Plant";
 import Carpet from "./Carpet";
 import FloorLamp from "./FloorLamp";
 import Painting from "./Painting";
+import LightmapBake from "./LightmapBake";
 import FloorLine from "./FloorLine";
 import { PerfProbe } from "./Perf";
 import { ACTIVE_LIGHTING } from "@/lib/lighting";
@@ -1170,6 +1171,11 @@ export default function GalleryScene({
     () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("tune"),
     [],
   );
+  // ?lightbake — run the in-browser lightmap baker (walls/floor → unlit + lightMap).
+  const lightbake = useMemo(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("lightbake"),
+    [],
+  );
   const handleReady = useCallback(() => {
     setRevealed(true);
     onReady?.();
@@ -1204,6 +1210,7 @@ export default function GalleryScene({
         inspectedIndex={inspectedIndex}
       />
       <PerfProbe />
+      {lightbake && <LightmapBake />}
       </Canvas>
     </>
   );
