@@ -1,130 +1,170 @@
-# Lightmap baking — gallery lighting (design, recipe, and the pits we fell into)
+# Gallery lighting & shadows — the recipe for every room (design, recipe, pits)
 
 > _Last updated: 2026-06-01._
 >
-> **Prod-critical (2026-06-01):** the in-browser baker is **always mounted** now — it is no
-> longer gated behind `?lightbake`. It used to be, which meant **production never baked**:
-> every visitor ran all 9 picture spotlights and sat at ~10 fps on a mid GPU (the spots are
-> the scene's #1 cost). Now every load bakes once (a cheap burst of ortho renders under the
-> reveal overlay), then drops the spots. This is option **A** below; option **B** (ship
-> pre-baked PNGs, zero per-load cost) is still the endgame (§6).
-> Read this before touching `LightmapBake.tsx`, `lightmapStore.ts`, `BakedMesh.tsx`, or
-> the picture-light / frame / nameplate materials. It is the distilled result of a long,
-> painful session — every gotcha below cost real time to find. New galleries should reuse
-> this system; new sessions should not re-derive it.
+> **This is the canonical lighting/shadow recipe — build every new room on it.** A gallery
+> room's lighting is **static** (lights and geometry never move), so nothing here is computed
+> per frame. Three pillars, each replacing a real-time cost with a baked/painted one:
+>   1. **Lightmaps** capture the picture-light pools → walls/floor draw unlit (§1–§2).
+>   2. **Static shadow decals** replace real-time screen-space AO (N8AO is gone) (§3).
+>   3. **Tone-mapping discipline**: one Reinhard exposure; know what is and isn't tone-mapped (§4).
+>
+> Read this before touching `LightmapBake.tsx`, `lightmapStore.ts`, `BakedMesh.tsx`, the
+> `*Shadow.tsx` decals, the picture-light / frame / nameplate / crown materials, or
+> `src/lib/lighting.ts`. It is the distilled result of several long, painful sessions — every
+> gotcha below cost real time. New rooms should reuse this system, not re-derive it.
 
-## 1. The problem & the win
+## 1. The lightmap win — bake the static lights, draw unlit
 
-Static lights on static geometry. The nine per-painting **SpotLights were the scene's #1
-GPU cost** — each shaded every fragment of the fill-rate-bound room every frame. Measured:
-removing them took roam ~84 → ~141 fps (frame time ~12 → ~7 ms; the spots were ~40–50% of
-the frame). Their only visible output is (a) a warm **pool on the wall/floor** and (b) a
-**glint on the gilt frame** — and the lights never move. So: bake the (diffuse) pool once,
-draw the surfaces **unlit**, and drop the real lights.
+Static lights on static geometry. The nine per-painting **SpotLights were the scene's #1 GPU
+cost** — each shaded every fragment of the fill-rate-bound room every frame (~40–50% of the
+frame; removing them took roam ~84 → ~141 fps). Their only visible output is a warm **pool on
+the wall/floor** and a **glint on the gilt frame**, and they never move. So: bake the diffuse
+pool once, draw the surfaces **unlit**, drop the real lights.
+
+The baker runs **in-browser on every load** (always mounted, no longer gated behind
+`?lightbake`). It used to be gated → **production never baked** → all 9 spotlights ran → ~10
+fps on a mid GPU. Now each load bakes a cheap burst of ortho renders under the reveal overlay,
+then drops the spots. (Shipping pre-baked PNGs to skip even that is the remaining endgame, §6.)
 
 ## 2. The one idea that made it work: capture, don't reconstruct
 
-We first tried to **reconstruct** the spotlight analytically (cone smoothstep + distance
-decay + N·L + albedo + a tone-mapped "base" term, as an additive decal). It was a tar pit:
-shape, brightness, hue, and colour-space never lined up; we hit an sRGB double-decode bug
-and the fundamental "tonemap(a+b) ≠ tonemap(a)+tonemap(b)" problem. **Abandon that approach.**
+We first tried to **reconstruct** the spotlight analytically (cone smoothstep + decay + N·L +
+albedo + a tone-mapped base term, as an additive decal). Tar pit: shape/brightness/hue/colour-
+space never lined up, plus an sRGB double-decode bug and the fundamental
+"tonemap(a+b) ≠ tonemap(a)+tonemap(b)" problem. **Abandon analytic reconstruction.**
 
-What works (industry standard = **lightmaps**): render a **white probe** at each surface,
-lit by the **real lights**, into a RenderTarget. That texture *is* the exact lighting — no
-maths to match. Use it as `lightMap`. Faithful by construction, and free at runtime (unlit
-material = no per-frame light loop).
+What works (industry standard = **lightmaps**): render a **white probe** at each surface, lit
+by the **real lights**, into a RenderTarget. That texture *is* the exact lighting — no maths to
+match. Use it as `lightMap`; faithful by construction, free at runtime (unlit = no light loop).
+Pieces: `LightmapBake.tsx` (ortho cam + white probe + RT), `lightmapStore.ts` (zustand store
+keyed by surface id), `BakedMesh.tsx` (a plane that is `MeshStandard` until baked, then unlit
+`MeshBasic(map × lightMap)`).
 
-Pieces:
-- `LightmapBake.tsx` — the in-browser baker (ortho cam + white probe + RenderTarget).
-- `lightmapStore.ts` — a zustand store the baker publishes lightmaps into (keyed by id).
-- `BakedMesh.tsx` — a planar surface that renders `MeshStandard` until baked, then unlit
-  `MeshBasic(map × lightMap)`.
+## 3. Static shadow decals — the AO replacement (N8AO is removed)
 
-## 3. Recipe for a NEW room
+Real-time **N8AO cost ~13 ms/frame** on a mid GPU (over half the budget; prod 21.5→8.3 ms
+when off), doubled draw calls via its normal pass, **bypassed Reinhard so the scene rendered
+too bright** (see §4), grained the edges, and **darkened the artwork**. Every shadow it drew is
+static, so we paint each one once as a **multiply-blend decal** and deleted the EffectComposer.
+(`?ao=on` still mounts it as a live A/B reference; default off.)
 
-1. Build walls/floor with `<BakedMesh id="…" width height map …/>` (planes; their own 0..1
-   UV is the lightmap UV — no unwrap needed). Tag = `userData={{ lightbake: id }}`.
-2. Mount `<LightmapBake/>` (now **always mounted**, not gated — see the prod note up top).
-   It polls until the surfaces' albedo has loaded **and the picture spots are aimed** (see
-   pit #5), then bakes each once and publishes a `lightMap` to the store.
-3. `BakedMesh` swaps to `MeshBasic(map × lightMap, lightMapIntensity = π)` when its lightmap
-   appears. The real picture lights render until `store.baked`, then drop (`Painting` gates
-   `<PaintingLighting>`/`<FloorWash>` on `!lmBaked`).
-4. `?tune` → **"Bake / 烘焙"** folder: `floorWash`, `floorWashAngle`, `nameplateBrightness`
-   + a **Re-bake** button. Baked params (floorWash, spot*) need Re-bake; live params
-   (nameplateBrightness, exposure, ambient, AO) update instantly.
+**The multiply trick (all decals share it).** A transparent plane with `CustomBlending`
+`Zero`/`SrcColor` → output `dst × src`: where the shader writes white the surface is unchanged,
+where it writes <1 the surface is darkened **multiplicatively**, so the wallpaper damask / rug
+pattern / wood grain shows *through* the shadow instead of flattening to grey. `depthWrite:
+false`; nudge the decal a hair off its surface to avoid z-fighting. This is the same technique
+as the original per-frame `FrameShadow` drop-shadow.
 
-## 4. The pits (each one cost us)
+The decal components (each reads its strength/fade live from the tuning store):
+- **`ContactShadow`** — a **rounded-rectangle** floor blob grounding a piece of furniture (the
+  daybed). Rounded-box SDF, not a radial gradient: a rectangular object casts a rectangular
+  contact shadow. Knobs: strength, width×depth (the footprint), feather, corner radius, x/z.
+- **`WallShadow`** — one per wall, an **edge vignette**: darkens near the **top** (ceiling/cove
+  seam), the **two vertical sides** (corners), and the **bottom** (baseboard). Fades are given
+  in **metres** (converted to the wall's 0..1 UV) so a band is the same thickness on every wall.
+- **`PerimeterShadow`** — a horizontal **perimeter vignette** for the ceiling and the floor:
+  darkens near the outer edges, fades to nothing toward the centre (so the sky oculus and the
+  rug stay untouched). One instance under the ceiling (crown↔ceiling AO), one above the floor
+  (floor↔baseboard AO).
 
-1. **`lightMapIntensity = π`.** three's lightMap energy convention. With π, an unlit
-   `MeshBasic(map × lightMap)` matches a `MeshStandard` diffuse surface lit by the same
-   lights. Without it the pool reads ~3× too dim.
-2. **Colour space.** Bake with `renderer.toneMapping = NoToneMapping` and the RT as
-   `LinearSRGBColorSpace` → you capture **linear irradiance**. The unlit wall (`MeshBasic`,
-   `toneMapped: true`) then re-applies the room's exposure+Reinhard. Keep the crisp tiled
-   wallpaper on `map` (its own `texture.repeat`) and the smooth lighting on `lightMap`
-   (low-res, the plane's 0..1 UV) — don't bake albedo into the lightmap or it goes soft.
-3. **three light layers test against the CAMERA only — there is NO per-object light
-   masking** in the forward renderer (`light.layers.test(camera.layers)`). You **cannot**
-   make a light "illuminate only the frames, not the walls." A whole reverted attempt died
-   on this false assumption. Verified in three r184 source.
-4. **Shadow maps blow the texture-unit budget.** Enabling `castShadow` on the 9 spots → 9
-   shadow-map samplers → exceeds `MAX_TEXTURE_IMAGE_UNITS(16)` → shaders fail to compile →
-   **black screen**. Never enable shadows on many lights at once. To bake AO, accumulate
-   **one** shadow light at a time.
-5. **Bake-timing race (this caused a "black walls" regression).** A `SpotLight`'s `.target`
-   is positioned in a **ref callback**. If the bake fires before that ref runs, the cone
-   points at the default **origin** → the wall lightmap bakes **dark**, and the floor near
-   the origin catches the stray light. Symptom: floor lit, walls black. Fix: the baker waits
-   until a picture spot's `target.position` is off-origin (`lengthSq > 0.25`) before baking.
-6. **Durable React integration.** Do **not** mutate `mesh.material` from outside React — a
-   re-render clobbers it. Publish the lightmap to the store; the component (`BakedMesh`,
-   `Nameplate`) chooses `MeshBasic`/`MeshStandard`. This survives re-renders.
-7. **Bake exactly once.** After baking, the spots drop; a *second* bake would capture
-   pool-less (dark) walls. `bakeAll` returns early if `store.baked` (guards StrictMode
-   double-invoke / stray timers from overwriting good lightmaps).
-8. **Lightmaps are diffuse-only — they CANNOT hold view-dependent specular.** Consequences:
-   - **Gilt frames**: don't bake them unlit-flat (loses sheen + relief → reads fake). Use
-     the 9-slice **photo unlit at true brightness** (`MeshBasic`, `toneMapped: false`) — the
-     photo already carries lighting. **Swapping a frame = swapping the photo** (9-slice
-     auto-fits any painting size, zero light tuning). This is the "easy frame swap" goal.
-   - **Nameplate (brass)**: keep it a **lit `MeshStandard`** (envMap reflection = sheen,
-     normalMap = engraving relief) + a soft top-shade painted into the texture. Baking it
-     unlit made it flat/pale. `nameplateBrightness` (envMapIntensity) is a live knob.
-9. **N8AO is the source of the grain/shimmer.** It's a real-time screen-space AO, and it is
-   **expensive**: measured on prod (baked scene) at `quality="high"` + `halfRes={false}` it
-   cost ~11 ms/frame (8.3 → 19.5 ms) — over half the frame budget, and its normal-pass
-   doubles draw calls + triangles. We tried `halfRes` to reclaim ~half of that, but the
-   upsampled AO had **visibly grainy/ragged edges**, so we kept `quality="high"` +
-   `halfRes={false}` (full-res). The cost stays — the real win is the endgame: bake AO into
-   the lightmaps and **drop N8AO entirely** (smooth, static, free, stops darkening the art).
+Why three concave seams need *both* `WallShadow` (top) **and** `PerimeterShadow` (ceiling): the
+proud crown moulding stands in front of the wall, so the wall-top darkening is occluded by it —
+the ceiling side of that seam needs its own decal.
 
-## 5. Verification gotchas (for agents)
+## 4. Brightness & tone-mapping (the trap that made the room "too bright/too dark")
 
-- **Backgrounded automation tabs throttle/▮pause rAF** → the scene never reveals and the
-  bake (if rAF-driven) never fires. Poll the bake via `setTimeout` (fires backgrounded).
-  Fresh page loads frequently **stall** in an automation tab — verify in a **foreground**
-  browser, or drive frames via `window.__r3f.advance()` + hide the reveal overlay.
-- **HMR duplicates the zustand store module** → the baker writes lightmaps into one store
-  instance while components read another (so meshes don't switch). **Hard-reload** for a
-  single clean module graph; don't trust HMR for store-coupled changes.
-- **`window.__perfBench(N)`** (in `Perf.tsx`) gives reliable GPU timing — it renders the
-  composer N times synchronously and `ctx.finish()`es. Passive fps is meaningless in a
-  throttled tab. **Absolute fps drifts with the GPU clock** (downclocks when idle/background);
-  only **back-to-back A/B ratios in the same session** are trustworthy. Toggle the 9 spots
-  in one call (`perfGroup === "paintingLight"`, `.visible`) to measure their exact cost.
+The renderer uses **Reinhard** tone-mapping with one `exposure` (`ACTIVE_LIGHTING.exposure`,
+live via `?tune` Mood → exposure). Two hard-won facts:
 
-## 6. TODO / endgame (not done yet)
+- **An `EffectComposer` with no `ToneMappingEffect` bypasses Reinhard.** While N8AO's composer
+  was mounted, the whole scene rendered un-tone-mapped → **~1.3× brighter**. People got used to
+  that look. Deleting the composer restored Reinhard (darker); to keep the brightness we **re-
+  baked it into exposure (0.4 → 1.05)**, calibrated by matching the **wall mid-tone luminance**
+  to the `?ao=on` reference (full-frame mean under-reads, because the bright version clips
+  highlights). Lesson: if you add/remove postprocessing, re-check exposure.
+- **`toneMapped: false` materials ignore exposure entirely.** The gilt frames, the gold
+  ring/crown moulding, and the cove light strip are unlit photo/additive materials output raw.
+  So when the walls got brighter (exposure ↑), the crown moulding stayed put and read
+  *relatively* dim. Fix: a **`crownBright`** multiplier on its material colour (a `MeshBasic`
+  colour >1 brightens the map). Anything `toneMapped:false` needs its own brightness knob — it
+  won't follow the exposure.
 
-- **Bake AO + contact shadows into the lightmaps** (accumulate a hemisphere of shadow
-  lights, one at a time per pit #4) → drop real-time **N8AO** and the faked `FrameShadow`
-  decal. Removes the grain, the "N8AO darkens the art" problem, and a per-frame cost.
-- **Bake-once → ship the texture (option B, the real endgame).** We currently re-bake at
-  every load (option A: cheap, but the 9 spots must exist + render until the bake fires, and
-  we redo it every visit). Better: bake in dev, export the lightmap PNGs to `/public`, load
-  them in prod (set `store.baked` on load) → zero visitor bake cost, and the picture lights
-  never need to exist in prod. Watch the 8-bit **linear** color-space pit when encoding PNGs
-  (the RTs are `LinearSRGBColorSpace`; load back with the same, don't let the decoder sRGB it).
-- **Non-planar geometry** (curved walls, furniture, plants) needs a `uv2` unwrap (xatlas) to
-  be lightmapped. Walls/floor are planes, so they don't.
-- Package as a reusable `<BakedRoom>` wrapper once the above settle.
+## 5. Recipe for a NEW room
+
+1. **Surfaces:** build walls/floor with `<BakedMesh id="…" width height map …/>` (planes; their
+   own 0..1 UV is the lightmap UV — no unwrap). The albedo keeps its own `texture.repeat` so the
+   wallpaper stays crisp while the low-res lightmap holds the smooth lighting.
+2. **Bake:** mount `<LightmapBake/>` (always-on). It polls until albedo has loaded **and the
+   picture spots are aimed** (pit #5), bakes each surface once, publishes a `lightMap`. The real
+   picture lights render until `store.baked`, then drop.
+3. **Shadow decals:** place `ContactShadow` under each freestanding object, one `WallShadow` per
+   wall (matched size/position, nudged into the room, `renderOrder = -1` so props/plants composite
+   over it — see pit #11), and two `PerimeterShadow`s (under the ceiling, above the floor).
+4. **Brightness:** set the room's `exposure` in `src/lib/lighting.ts`; add a brightness knob for
+   any `toneMapped:false` decoration (crown, etc.) that should track the walls.
+5. **Tune by hand:** every shadow/brightness value is a live `?tune` knob (folders: Mood, Sofa
+   shadow, Wall shadows). Dial against `?ao=on` (the old AO look) or by eye, then bake the values
+   into `TUNING_DEFAULTS`. The store reads identical to those defaults when the panel is absent,
+   so normal visitors never load leva.
+
+## 6. The pits (each one cost us)
+
+1. **`lightMapIntensity = π`.** three's lightMap energy convention. With π, unlit
+   `MeshBasic(map × lightMap)` matches a `MeshStandard` diffuse surface lit by the same lights;
+   without it the pool reads ~3× too dim.
+2. **Colour space.** Bake with `NoToneMapping` + RT as `LinearSRGBColorSpace` → you capture
+   **linear irradiance**. The unlit wall (`MeshBasic`, `toneMapped: true`) re-applies the room's
+   exposure+Reinhard. Don't bake albedo into the lightmap or it goes soft.
+3. **three light layers test against the CAMERA only — there is NO per-object light masking.**
+   You cannot make a light "illuminate only the frames, not the walls." A whole reverted attempt
+   died on this. Verified in three r184 source.
+4. **Shadow maps blow the texture-unit budget.** `castShadow` on 9 spots → 9 samplers → exceeds
+   `MAX_TEXTURE_IMAGE_UNITS(16)` → shaders fail → **black screen**. Never enable shadows on many
+   lights at once.
+5. **Bake-timing race ("black walls").** A `SpotLight`'s `.target` is set in a **ref callback**;
+   if the bake fires first, the cone points at the origin → walls bake **dark**. Fix: the baker
+   waits until a picture spot's `target.position` is off-origin (`lengthSq > 0.25`).
+6. **Durable React integration.** Don't mutate `mesh.material` from outside React — a re-render
+   clobbers it. Publish to the store; the component chooses `MeshBasic`/`MeshStandard`.
+7. **Bake exactly once.** After baking, the spots drop; a second bake captures pool-less (dark)
+   walls. `bakeAll` returns early if `store.baked`.
+8. **Lightmaps are diffuse-only — no view-dependent specular.** Gilt frames: use the 9-slice
+   **photo unlit at true brightness** (`MeshBasic`, `toneMapped:false`) — swapping a frame =
+   swapping the photo. Nameplate (brass): keep it a **lit `MeshStandard`** (envMap sheen +
+   normalMap relief); baking it unlit made it flat. `nameplateBrightness` is a live knob.
+9. **Shadow decals multiply — keep them subtle and tune the FADE in metres.** Overlapping decals
+   (corner + cove + base on the same pixel) take the `max`, not the sum, so they don't stack to
+   black. A radial gradient looks wrong under a rectangular object — use the rounded-rect SDF.
+10. **`PerimeterShadow` centre must reach 0** or it darkens the rug / dims the sky oculus. The
+    perimeter vignette fades to fully transparent before the middle.
+11. **Corner shadows render OVER the plants** if the decal's `renderOrder` is higher than the
+    foliage. The corner plants are transparent (no depth write), so depth alone won't occlude the
+    decal. Set `WallShadow renderOrder = -1` → it draws right after the opaque wall but *before*
+    the plants, which then composite on top. (It still multiplies the wall correctly.)
+12. **`toneMapped:false` decorations don't follow exposure** — give them their own brightness
+    multiplier (see §4) or they drift relative to the tone-mapped walls.
+
+## 7. Verification gotchas (for agents)
+
+The Claude Preview harness throttles rAF and stalls fresh R3F loads; the full **unstick + fixed-
+pose A/B + luminance-matching recipe** lives in memory `reference_preview_raf_throttling`. Key
+points: drive frames with `window.__r3f.advance(t)` in a loop (not just screenshots); pin the
+camera with `window.__camFreeze`; live-tune via `window.__tuning.setState` but **await a React
+flush** before reading material-rebuild knobs; `window.__perfBench(N)` gives reliable GPU timing
+(absolute fps drifts with the GPU clock — only same-session A/B ratios are trustworthy); HMR
+duplicates the zustand store, so **restart the dev server** for store-coupled changes and
+hard-reload `?tune` (leva won't hot-add knobs). **Verify 3D visuals in a foreground browser.**
+
+## 8. TODO / endgame (not done yet)
+
+- **Bake-once → ship the texture.** We re-bake the lightmaps at every load (cheap, but the 9
+  spots must exist + render until it fires). Better: bake in dev, export the lightmap PNGs to
+  `/public`, set `store.baked` on load → zero visitor bake cost, spots never exist in prod. Mind
+  the 8-bit **linear** colour-space pit when encoding (RTs are `LinearSRGBColorSpace`; load back
+  the same, don't let the decoder sRGB them). The shadow decals are already static + free, so no
+  export needed for them.
+- **Non-planar lightmapping** (curved walls, furniture self-AO) would need a `uv2` unwrap
+  (xatlas). Walls/floor are planes, so they don't; furniture relies on the floor `ContactShadow`.
+- Package the whole stack (BakedMesh + LightmapBake + the shadow decals + exposure) as a reusable
+  `<BakedRoom>` wrapper once a second room exercises it.
