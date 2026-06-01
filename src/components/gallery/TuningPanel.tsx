@@ -33,9 +33,9 @@ export default function TuningPanel() {
     // ?lightbake only. floorWash + the picture-light values are BAKED into the lightmaps,
     // so changing them does nothing until you press Re-bake. nameplateBrightness is LIVE.
     "Bake / 烘焙 (改完点重烤)": folder({
-      floorWash: { value: TUNING_DEFAULTS.floorWash, min: 0, max: 12, step: 0.1 },
-      floorWashAngle: { value: TUNING_DEFAULTS.floorWashAngle, min: 0.15, max: 0.7, step: 0.01 },
-      nameplateBrightness: { value: TUNING_DEFAULTS.nameplateBrightness, min: 0, max: 3, step: 0.05 },
+      floorWash: { value: TUNING_DEFAULTS.floorWash, min: 0, max: 12, step: 0.1, label: "地面光 floor" },
+      floorWashAngle: { value: TUNING_DEFAULTS.floorWashAngle, min: 0.15, max: 0.7, step: 0.01, label: "地面光大小 size" },
+      nameplateBrightness: { value: TUNING_DEFAULTS.nameplateBrightness, min: 0, max: 3, step: 0.05, label: "铭牌亮度 plate" },
       "重新烘焙 / Re-bake": button(() => (window as unknown as { __rebake?: () => void }).__rebake?.()),
     }),
     "Plants / 植物灯": folder({
@@ -65,5 +65,5 @@ export default function TuningPanel() {
     set(vals);
   }, [vals, set]);
 
-  return <Leva collapsed={false} />;
+  return <Leva collapsed={false} theme={{ sizes: { rootWidth: "320px" } }} />;
 }
