@@ -12,6 +12,7 @@ import Bench from "./Bench";
 import Plant from "./Plant";
 import Carpet from "./Carpet";
 import FloorLamp from "./FloorLamp";
+import ContactShadow from "./ContactShadow";
 import Painting from "./Painting";
 import LightmapBake from "./LightmapBake";
 import FloorLine from "./FloorLine";
@@ -334,6 +335,13 @@ function AnchorControls({
     u.current = U[start] ?? 0;
     targetU.current = u.current;
   }, [U, start]);
+
+  // Dev A/B hook: read the current camera pose to feed window.__camFreeze (see useFrame).
+  useEffect(() => {
+    const w = window as unknown as { __camPose?: () => { pos: number[]; quat: number[] } };
+    w.__camPose = () => ({ pos: camera.position.toArray(), quat: camera.quaternion.toArray() });
+    return () => { delete w.__camPose; };
+  }, [camera]);
 
   // --- helpers -----------------------------------------------------------
   const nearestAnchorIndex = () => {
@@ -848,6 +856,16 @@ function AnchorControls({
   }, [active, U]);
 
   useFrame((_, delta) => {
+    // Dev A/B hook: window.__camFreeze = {pos:[x,y,z], quat:[x,y,z,w]} pins the camera
+    // to an exact pose (read a good one via window.__camPose()) so before/after
+    // screenshots are taken from an identical view. Inert unless set.
+    const frozenCam = (window as unknown as { __camFreeze?: { pos: number[]; quat: number[] } }).__camFreeze;
+    if (frozenCam) {
+      camera.position.fromArray(frozenCam.pos);
+      camera.quaternion.fromArray(frozenCam.quat);
+      camera.updateMatrixWorld();
+      return;
+    }
     const dt = Math.min(delta, 0.1); // cap after tab-switch so we don't jump
     if (!dragging.current) {
       u.current = THREE.MathUtils.damp(u.current, targetU.current, easeLambda.current, dt);
@@ -1041,9 +1059,19 @@ function SceneContent({
   const aoIntensity = useTuningStore((s) => s.aoIntensity);
   const aoRadius = useTuningStore((s) => s.aoRadius);
   const plantFill = useTuningStore((s) => s.plantFill);
-  // ?ao=off disables the N8AO contact-shadow post-process — a console-free perf A/B.
+  const sofaShadow = useTuningStore((s) => s.sofaShadow);
+  const sofaShadowW = useTuningStore((s) => s.sofaShadowW);
+  const sofaShadowH = useTuningStore((s) => s.sofaShadowH);
+  const sofaShadowX = useTuningStore((s) => s.sofaShadowX);
+  const sofaShadowZ = useTuningStore((s) => s.sofaShadowZ);
+  const sofaShadowSoft = useTuningStore((s) => s.sofaShadowSoft);
+  const sofaShadowRadius = useTuningStore((s) => s.sofaShadowRadius);
+  // Real-time N8AO is being replaced by static shadow decals (sofa/ceiling/corners) +
+  // the baked lightmaps — it brightened the scene (its EffectComposer bypassed Reinhard
+  // tone-mapping), grained the edges, and darkened the art. Default OFF now; load ?ao=on
+  // to bring it back as a live A/B reference while tuning the decals. (Phase 4: delete it.)
   const aoEnabled = useMemo(
-    () => (typeof window === "undefined" ? true : new URLSearchParams(window.location.search).get("ao") !== "off"),
+    () => (typeof window === "undefined" ? false : new URLSearchParams(window.location.search).get("ao") === "on"),
     [],
   );
   return (
@@ -1087,6 +1115,15 @@ function SceneContent({
         {/* perfGroup tags let the ?diag isolation pass toggle these at runtime. */}
         <group userData={{ perfGroup: "props" }}>
           <Carpet position={[0, 0, -2]} />
+          {sofaShadow > 0 && (
+            <ContactShadow
+              position={[sofaShadowX, 0.025, sofaShadowZ]}
+              size={[sofaShadowW, sofaShadowH]}
+              strength={sofaShadow}
+              feather={sofaShadowSoft}
+              radius={sofaShadowRadius}
+            />
+          )}
           <Bench />
           <FloorLamp position={[1.2, -0.02, -2.2]} rotationY={2.158} pointIntensity={1} />
         </group>

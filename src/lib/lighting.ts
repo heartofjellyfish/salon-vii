@@ -61,7 +61,12 @@ export const LIGHTING_PRESETS = {
   // because it keeps its own picture-light accent.
   eveningSalon: {
     label: "Evening Salon",
-    exposure: 0.4,
+    // 1.05 (was 0.4): the old N8AO EffectComposer bypassed Reinhard tone-mapping, so the
+    // live scene rendered brighter than 0.4-Reinhard. We removed the composer, so we bake
+    // that brightness back into exposure. Calibrated by matching the WALL mid-tone luma to
+    // the ao=on reference at the room-centre pose (wallM 21.5, wallR 26.2 → exposure ~1.05;
+    // full-frame mean alone under-reads because ao=on clips highlights). Live via ?tune.
+    exposure: 1.05,
     ambient: { color: "#5a3a22", intensity: 0.8 },
     hemisphere: { sky: "#caa06a", ground: "#0a0608", intensity: 0.32 },
     fog: { color: "#140b10", near: 18, far: 44 },

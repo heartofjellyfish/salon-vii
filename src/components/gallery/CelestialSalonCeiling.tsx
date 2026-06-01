@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useTexture } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
@@ -219,6 +219,8 @@ export interface CelestialSalonCeilingProps {
   domeRise?: number;
   crownHeight?: number;
   coveLightOpacity?: number;
+  /** Overall brightness multiplier on the photographic crown moulding band (1 = as-authored). */
+  crownBright?: number;
   /** Freeze the sky animation (e.g. while inspecting a painting). */
   paused?: boolean;
 }
@@ -234,6 +236,7 @@ export default function CelestialSalonCeiling({
   domeRise = 1.1,
   crownHeight = 0.42,
   coveLightOpacity = 0.35,
+  crownBright = 1.0,
   paused = false,
 }: CelestialSalonCeilingProps) {
   const [cloudsTex, ringTex, crownTex, coveTex] = useTexture([
@@ -330,6 +333,12 @@ export default function CelestialSalonCeiling({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [walls, crownTex, crownHeight]
   );
+  // Crown moulding is an unlit (toneMapped:false) photo strip, so exposure/Reinhard don't
+  // touch it — its brightness is set by the material colour, which multiplies the texture.
+  // crownBright > 1 brightens, < 1 dims. Live-tunable so it can match the old look.
+  useEffect(() => {
+    crownMats.forEach((m) => m.color.setScalar(crownBright));
+  }, [crownMats, crownBright]);
   const coveMats = useMemo(
     () =>
       walls.map((w) =>
