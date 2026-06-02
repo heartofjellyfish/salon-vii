@@ -63,7 +63,10 @@ export default function TuningPanel() {
       "重新烘焙 / Re-bake": button(() => (window as unknown as { __rebake?: () => void }).__rebake?.()),
     }),
     "Plants / 植物灯": folder({
-      plantFill: { value: TUNING_DEFAULTS.plantFill, min: 0, max: 25, step: 0.5 },
+      plantFill: { value: TUNING_DEFAULTS.plantFill, min: 0, max: 25, step: 0.5, label: "补光 fill" },
+      treeShadow: { value: TUNING_DEFAULTS.treeShadow, min: 0, max: 1, step: 0.01, label: "叶影 strength" },
+      treeShadowScale: { value: TUNING_DEFAULTS.treeShadowScale, min: 1, max: 6, step: 0.1, label: "范围 size" },
+      treeShadowSoft: { value: TUNING_DEFAULTS.treeShadowSoft, min: 0, max: 5, step: 0.1, label: "虚化 soft" },
     }),
     "Lamp / 落地灯": folder({
       lampTilt: { value: TUNING_DEFAULTS.lampTilt, min: -0.5, max: 0.5, step: 0.01 },

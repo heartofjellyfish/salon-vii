@@ -31,6 +31,10 @@ export interface Tuning {
   sofaShadowZ: number; // centre Z (m)
   sofaShadowSoft: number; // soft-edge feather width (normalised)
   sofaShadowRadius: number; // rounded-rect corner roundness (0 = sharp, 0.5 = very round)
+  // Static baked dappled leaf-shadow decal under each corner tree (FoliageShadow).
+  treeShadow: number; // strength 0..1 (0 = off)
+  treeShadowScale: number; // footprint side (m) — canopy spread
+  treeShadowSoft: number; // penumbra blur (texels)
   // Static wall edge-shadows (replace N8AO at the ceiling cove + vertical corners).
   coveShadow: number; // strength of the darkening along the top (ceiling/cove seam) 0..1
   coveFade: number; // how far it reaches down the wall (m)
@@ -89,6 +93,9 @@ export const TUNING_DEFAULTS: Tuning = {
   sofaShadowZ: -2,
   sofaShadowSoft: 0.49,
   sofaShadowRadius: 0.54,
+  treeShadow: 0.55,
+  treeShadowScale: 3.2,
+  treeShadowSoft: 1.5,
   coveShadow: 0,
   coveFade: 0.85,
   cornerShadow: 0.86,

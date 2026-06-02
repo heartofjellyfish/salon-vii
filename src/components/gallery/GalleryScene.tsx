@@ -13,6 +13,7 @@ import Plant from "./Plant";
 import Carpet from "./Carpet";
 import FloorLamp from "./FloorLamp";
 import ContactShadow from "./ContactShadow";
+import FoliageShadow from "./FoliageShadow";
 import Painting from "./Painting";
 import LightmapBake from "./LightmapBake";
 import FloorLine from "./FloorLine";
@@ -1059,6 +1060,9 @@ function SceneContent({
   const aoIntensity = useTuningStore((s) => s.aoIntensity);
   const aoRadius = useTuningStore((s) => s.aoRadius);
   const plantFill = useTuningStore((s) => s.plantFill);
+  const treeShadow = useTuningStore((s) => s.treeShadow);
+  const treeShadowScale = useTuningStore((s) => s.treeShadowScale);
+  const treeShadowSoft = useTuningStore((s) => s.treeShadowSoft);
   const sofaShadow = useTuningStore((s) => s.sofaShadow);
   const sofaShadowW = useTuningStore((s) => s.sofaShadowW);
   const sofaShadowH = useTuningStore((s) => s.sofaShadowH);
@@ -1128,10 +1132,14 @@ function SceneContent({
           <FloorLamp position={[1.2, -0.02, -2.2]} rotationY={2.158} pointIntensity={1} />
         </group>
         {/* The two tallest trees flanking the north wall — left and right corners.
-            Each carries a short-throw warm fill so it reads in the dim corner. */}
+            Each carries a short-throw warm fill so it reads in the dim corner, plus a
+            baked dappled leaf-shadow decal on the floor (FoliageShadow — assumed soft
+            overhead light, multiply blend like the other static shadow decals). */}
         <group userData={{ perfGroup: "plants" }}>
           <Plant url="/models/plants/dracaena_variegata.glb" position={[-5, 0, -5]} fillIntensity={plantFill} fillDistance={3.5} fillHeight={1.3} fillFront={0.5} />
           <Plant url="/models/plants/dypsis_lutescens.glb" position={[5, 0, -5]} fillIntensity={plantFill} fillDistance={3.5} fillHeight={1.3} fillFront={0.5} />
+          <FoliageShadow url="/models/plants/dracaena_variegata.glb" position={[-5, 0.02, -5]} size={treeShadowScale} strength={treeShadow} soft={treeShadowSoft} />
+          <FoliageShadow url="/models/plants/dypsis_lutescens.glb" position={[5, 0.02, -5]} size={treeShadowScale} strength={treeShadow} soft={treeShadowSoft} />
         </group>
         {/* warm reading spotlight from the lamp head, aimed at the seat (where a
             book would be) */}
