@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLoader } from "@react-three/fiber";
 import * as THREE from "three";
 import { TextureLoader } from "three";
+import { useLightmapStore } from "./lightmapStore";
 
 // Slice lines in UV space (the four edges of the frame's opening).
 interface Slice {
@@ -233,7 +234,18 @@ export function NineSliceFrame({
   );
   const sidesGeo = useMemo(() => buildFrameSides(pw, ph, frameWidth, rebate, depth), [pw, ph, frameWidth, rebate, depth]);
 
+  // Once the room's lighting is baked, the picture spotlights are gone — a lit
+  // MeshStandard frame would fall dark under the dim ambient. The 9-slice texture is a
+  // PHOTO that already carries its own light + relief, so show it UNLIT at true
+  // brightness (like the canvas). Frames then never depend on scene lighting: swapping
+  // a frame = swapping the photo (any size; 9-slice auto-fits), no per-frame tuning.
+  const baked = useLightmapStore((s) => s.baked);
   const frontMat = useMemo(() => {
+    if (baked) {
+      return new THREE.MeshBasicMaterial({
+        map: texture, transparent: true, alphaTest: 0.1, side: THREE.DoubleSide, toneMapped: false,
+      });
+    }
     const m = new THREE.MeshStandardMaterial({
       map: texture,
       normalMap: normal ?? null,
@@ -245,11 +257,13 @@ export function NineSliceFrame({
     });
     m.normalScale.set(normalScale, normalScale);
     return m;
-  }, [texture, normal, normalScale, roughness, metalness]);
+  }, [texture, normal, normalScale, roughness, metalness, baked]);
 
   const sidesMat = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: edgeColor, vertexColors: true, roughness: 0.65, metalness: 0.1, side: THREE.DoubleSide }),
-    [edgeColor],
+    () => baked
+      ? new THREE.MeshBasicMaterial({ color: edgeColor, vertexColors: true, side: THREE.DoubleSide, toneMapped: false })
+      : new THREE.MeshStandardMaterial({ color: edgeColor, vertexColors: true, roughness: 0.65, metalness: 0.1, side: THREE.DoubleSide }),
+    [edgeColor, baked],
   );
   if (!frontGeo) return null;
   // back sits on the wall (z=0); front face stands `depth` proud. Painting.tsx

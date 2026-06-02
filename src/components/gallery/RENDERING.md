@@ -1,9 +1,15 @@
 # Gallery rendering — painting material, lighting, AO, resolution
 
-> _Last updated: 2026-05-29._
+> _Last updated: 2026-05-31._
 > The "why" behind how the room is lit and how the art is drawn. These were all
 > reverse-engineered from visual bugs; read this before touching `Painting.tsx`,
 > `PaintingLighting.tsx`, `lighting.ts`, `quality.ts`, or the N8AO post-process.
+>
+> **Perf migration in progress:** the per-painting spotlights (the scene's #1 cost) are
+> being replaced by a **lightmap bake** (`?lightbake`) — the warm wall/floor pools are
+> baked into textures and the real lights dropped. Design, recipe, and the (many) gotchas
+> are in **[`LIGHTBAKE.md`](./LIGHTBAKE.md)** — read it before touching the bake, the
+> picture lights, or the frame/nameplate materials.
 
 ## 1. Paintings are unlit, true-colour — always
 

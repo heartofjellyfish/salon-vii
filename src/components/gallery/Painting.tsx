@@ -2,15 +2,21 @@
 
 import { useRef, useMemo, useEffect, useState } from "react";
 import { useLoader, useFrame, useThree } from "@react-three/fiber";
+import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { TextureLoader } from "three";
 import { FrameGroup, getFrameDepth, getFrameWidth, FRAME_REBATE } from "./FrameBuilders";
 import Nameplate from "./Nameplate";
 import PaintingLighting from "./PaintingLighting";
 import { useTuningStore } from "./tuningStore";
+import { useLightmapStore } from "./lightmapStore";
 import { getPaintingTransform, getFacingDir } from "@/lib/gallery-config";
 import type { Artwork } from "@/lib/sanity";
 import { urlFor } from "@/lib/sanity";
+
+// Opt-in perf experiment: bake the per-painting picture-light into a static wall
+// decal + an in-shader frame glint, and drop the real SpotLight. Driven by the
+// tuningStore `bakePool` flag (initialised from `?bake`, runtime-toggleable for A/B).
 
 interface PaintingProps {
   artwork: Artwork;
@@ -200,9 +206,171 @@ function FrameShadow({ pw, ph, frameWidth }: { pw: number; ph: number; frameWidt
   );
 }
 
+// ── Faithful bake of the picture-light's WALL POOL ────────────────────────────
+// A real per-painting SpotLight is the scene's #1 cost: nine real lights each
+// shade every fragment of the fill-rate-bound room, even though all they leave on
+// screen is (a) a warm pool on the wall and (b) a glint on the frame. The light and
+// the art never move, so the pool is a FIXED blob — we bake it as a static additive
+// decal that reproduces the EXACT spotlight maths (cone smoothstep + distance decay
+// + N·L), modulated by the live wallpaper albedo so the damask brightens through it
+// just as the real light brightened it. (The earlier rejected bake used a flat
+// radial glow with no albedo → looked like an airbrushed blob; this one matches.)
+// The frame glint can't be baked (view-dependent specular) so it stays a real-time
+// in-shader light on the frame only — see Painting's frame patch.
+
+// In each painting's LOCAL frame the picture-light geometry is identical for all
+// nine: the lamp sits HEIGHT_ABOVE up and FORWARD out, aimed at the painting centre
+// (mirrors PaintingLighting.tsx).
+const POOL_LIGHT_LOCAL = new THREE.Vector3(0, 1.5, 0.9); // (FORWARD, HEIGHT_ABOVE)
+const POOL_SPOT_DIR = POOL_LIGHT_LOCAL.clone().multiplyScalar(-1).normalize(); // aim at centre
+const POOL_DISTANCE = 7, POOL_DECAY = 2; // mirror PaintingLighting
+
+// Reconstruct the SAME wallpaper UV the wall mesh uses (Room.tsx: TILE_W≈1.333,
+// TILE_H=1, repeat = wallWidth/TILE), so the baked pool's damask lines up in phase
+// with the surrounding wall instead of ghosting. texelU = dot(toU, worldPos)+offU;
+// texelV = worldPos.y (TILE_H=1). Derived per wall from the plane UVs + repeat.
+const POOL_UV: Record<string, { toU: [number, number, number]; offU: number }> = {
+  north: { toU: [0.75, 0, 0], offU: 4.5 },
+  south: { toU: [-0.75, 0, 0], offU: 4.5 },
+  east: { toU: [0, 0, 0.75], offU: 4.5 },
+  west: { toU: [0, 0, -0.75], offU: 1.5 },
+};
+
+function PicturePool({ pw, ph, frameWidth, wall }: { pw: number; ph: number; frameWidth: number; wall: string }) {
+  const intensity = useTuningStore((s) => s.spotIntensity);
+  const angle = useTuningStore((s) => s.spotAngle);
+  const penumbra = useTuningStore((s) => s.spotPenumbra);
+  const color = useTuningStore((s) => s.spotColor);
+  const exposure = useTuningStore((s) => s.exposure); // tone-map the pool like the room does
+  const wallpaper = useTexture("/textures/wallpaper.jpg");
+  const uv = POOL_UV[wall] ?? POOL_UV.north;
+
+  // Footprint: generously cover the lit arch (above + around the work). The shader's
+  // cone falloff carves the actual pool; outside it the fragment discards.
+  const W = (pw + frameWidth * 2) * 2.4 + 0.6;
+  const H = (ph + frameWidth * 2) * 2.1 + 1.4;
+
+  const mat = useMemo(() => {
+    const m = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending, // adds warm light onto the lit wall (damask shows through)
+      uniforms: {
+        uWall: { value: wallpaper },
+        uColor: { value: new THREE.Color(color) },
+        uStrength: { value: 0 },
+        uExposure: { value: exposure },
+        // Approx the wall's ambient+hemi shading (linear irradiance) so the decal can
+        // tone-map (base + spot) − (base): the spot then compresses exactly like a real
+        // light, and outside the cone the delta is 0 (seamless). Tuned in the A/B.
+        uBaseColor: { value: new THREE.Color(0.18, 0.089, 0.035) },
+        uBaseStrength: { value: 1.0 },
+        uLightLocal: { value: POOL_LIGHT_LOCAL },
+        uSpotDir: { value: POOL_SPOT_DIR },
+        uCosOuter: { value: Math.cos(angle) },
+        uCosInner: { value: Math.cos(angle * (1 - penumbra)) },
+        uDistance: { value: POOL_DISTANCE },
+        uDecay: { value: POOL_DECAY },
+        uToU: { value: new THREE.Vector3(...uv.toU) },
+        uOffU: { value: uv.offU },
+      },
+      vertexShader: `
+        varying vec2 vLocal; varying vec3 vWorld;
+        void main(){
+          vLocal = position.xy;                                   // group-local pos on the wall plane
+          vWorld = (modelMatrix * vec4(position, 1.0)).xyz;       // world pos → wallpaper UV
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }`,
+      fragmentShader: `
+        precision highp float;
+        varying vec2 vLocal; varying vec3 vWorld;
+        uniform sampler2D uWall; uniform vec3 uColor, uLightLocal, uSpotDir, uToU, uBaseColor;
+        uniform float uStrength, uCosOuter, uCosInner, uDistance, uDecay, uOffU, uExposure, uBaseStrength;
+        vec3 srgb2lin(vec3 c){ return pow(c, vec3(2.2)); }
+        vec3 tonemap(vec3 c){ c *= uExposure; c = c / (1.0 + c); return pow(c, vec3(1.0/2.2)); } // room's exposure+Reinhard+sRGB
+        void main(){
+          vec3 frag = vec3(vLocal, 0.0);                          // wall surface, local z=0
+          vec3 L = uLightLocal - frag;
+          float d = length(L);
+          vec3 Ldir = L / d;
+          float ndl = max(Ldir.z, 0.0);                           // wall normal = +z
+          float cosA = dot(uSpotDir, -Ldir);                      // angle to cone axis
+          float cone = smoothstep(uCosOuter, uCosInner, cosA);    // three's getSpotAttenuation
+          float distF = 1.0 / max(pow(d, uDecay), 0.01);          // three's getDistanceAttenuation
+          float win = clamp(1.0 - pow(d / uDistance, 4.0), 0.0, 1.0); distF *= win * win;
+          float I = uStrength * cone * distF * ndl;
+          if (I <= 0.0001) discard;
+          vec2 uv = vec2(dot(uToU, vWorld) + uOffU, vWorld.y);    // match the wall's wallpaper phase
+          vec3 albedo = srgb2lin(texture2D(uWall, uv).rgb);
+          vec3 base = albedo * uBaseColor * uBaseStrength;        // wall under ambient+hemi only (linear)
+          vec3 spot = albedo * srgb2lin(uColor) * I;              // the spotlight's added irradiance
+          // The wall already drew tonemap(base); add the delta so the result is
+          // tonemap(base + spot) — i.e. exactly what a real light would have produced.
+          vec3 delta = tonemap(base + spot) - tonemap(base);
+          gl_FragColor = vec4(max(delta, 0.0), 1.0);
+        }`,
+    });
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- live values pushed via uniforms below
+  }, []);
+
+  useEffect(() => { (wallpaper as THREE.Texture).wrapS = (wallpaper as THREE.Texture).wrapT = THREE.RepeatWrapping; wallpaper.needsUpdate = true; }, [wallpaper]);
+  useEffect(() => { mat.uniforms.uWall.value = wallpaper; }, [mat, wallpaper]);
+  useEffect(() => { mat.uniforms.uColor.value.set(color); }, [mat, color]);
+  useEffect(() => { mat.uniforms.uExposure.value = exposure; }, [mat, exposure]);
+  useEffect(() => { mat.uniforms.uCosOuter.value = Math.cos(angle); mat.uniforms.uCosInner.value = Math.cos(angle * (1 - penumbra)); }, [mat, angle, penumbra]);
+  // Map the real spotlight intensity onto the additive decal. Tuned against the real
+  // light in the same-camera A/B (the wall pool is the delta tonemap(base+spot)−tonemap(base)).
+  useEffect(() => { mat.uniforms.uStrength.value = intensity * 0.41; }, [mat, intensity]);
+  useEffect(() => () => mat.dispose(), [mat]);
+
+  // On the wall (local z≈0), centred on the painting; behind the frame which
+  // occludes the centre, leaving the arch. Additive, no depth write.
+  return (
+    <mesh position={[0, 0, 0.0035]} material={mat} renderOrder={0}>
+      <planeGeometry args={[W, H]} />
+    </mesh>
+  );
+}
+
+// A downward warm pool on the FLOOR in front of each work — the look of the picture
+// light spilling onto the floor. A wall-aimed picture spot barely touches the floor,
+// so this is a dedicated soft down-light. Like PaintingLighting it exists only until
+// the bake runs (then it's dropped); the bake captures its pool into the FLOOR
+// lightmap, so at runtime it costs nothing. Tunable via ?tune `floorWash` (0 = off).
+const FLOOR_WASH_FORWARD = 0.6; // m in front of the wall the pool centres
+function FloorWash({ position, facing }: { position: [number, number, number]; facing: [number, number, number] }) {
+  const intensity = useTuningStore((s) => s.floorWash);
+  const angle = useTuningStore((s) => s.floorWashAngle);
+  const color = useTuningStore((s) => s.spotColor);
+  const [px, , pz] = position;
+  const [fx, , fz] = facing;
+  const x = px + fx * FLOOR_WASH_FORWARD;
+  const z = pz + fz * FLOOR_WASH_FORWARD;
+  if (intensity <= 0) return null;
+  return (
+    <spotLight
+      userData={{ perfGroup: "paintingLight" }}
+      color={color}
+      intensity={intensity}
+      position={[x, 1.5, z]}
+      angle={angle}
+      penumbra={0.9}
+      decay={2}
+      distance={4}
+      ref={(l: THREE.SpotLight | null) => {
+        if (l) { l.target.position.set(x, 0, z); l.target.updateMatrixWorld(); }
+      }}
+    />
+  );
+}
+
 export default function Painting({ artwork, index, saturationRefs, paintingDimsRef, mode, hiRes, onReveal, onClick, onPlaqueClick }: PaintingProps) {
   const { position, rotation } = getPaintingTransform(artwork.position);
-  const facing = getFacingDir(artwork.position?.wall || "north");
+  const wall = artwork.position?.wall || "north";
+  const facing = getFacingDir(wall);
+  const bake = useTuningStore((s) => s.bakePool); // ?bake at load; runtime-toggleable for A/B
+  const lmBaked = useLightmapStore((s) => s.baked); // lightmaps baked → drop the real spotlights
   const groupRef = useRef<THREE.Group>(null!);
   const gl = useThree((s) => s.gl);
   // Device-adaptive width we'd load on inspect (≤ base ⇒ stay on base). Reported
@@ -339,6 +507,10 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
       {/* Faked drop shadow on the wall under the frame's bottom edge */}
       <FrameShadow pw={pw} ph={ph} frameWidth={frameWidth} />
 
+      {/* Baked picture-light pool on the wall (?bake) — replaces the real SpotLight's
+          wall contribution with a static additive decal of the exact same shape. */}
+      {bake && <PicturePool pw={pw} ph={ph} frameWidth={frameWidth} wall={wall} />}
+
       {/* Frame */}
       <group position={[0, 0, 0]}>
         <FrameGroup frameStyle={artwork.frameStyle} pw={pw} ph={ph} />
@@ -353,8 +525,16 @@ export default function Painting({ artwork, index, saturationRefs, paintingDimsR
 
     </group>
 
-      {/* Lights — world space, outside the painting's own transform */}
-      <PaintingLighting position={position as [number, number, number]} facing={facing} pw={pw} ph={ph} />
+      {/* Picture spotlight — world space. Present until the lightmaps are baked (so the
+          bake captures its wall/floor pool), then dropped: the pool now lives in the
+          lightmap, so the real light is redundant and its per-frame cost is the win.
+          (Also skipped by the older ?bake analytic-decal experiment.) */}
+      {!bake && !lmBaked && (
+        <>
+          <PaintingLighting position={position as [number, number, number]} facing={facing} pw={pw} ph={ph} />
+          <FloorWash position={position as [number, number, number]} facing={facing} />
+        </>
+      )}
     </>
   );
 }

@@ -4,6 +4,10 @@ import { useMemo } from "react";
 import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import CelestialSalonCeiling from "./CelestialSalonCeiling";
+import BakedMesh from "./BakedMesh";
+import WallShadow from "./WallShadow";
+import PerimeterShadow from "./PerimeterShadow";
+import { useTuningStore } from "./tuningStore";
 
 const W = 12, H = 4, D = 8;
 const HALF_W = W / 2;
@@ -33,6 +37,12 @@ function tiledClone(base: THREE.Texture, repeatX: number, repeatY: number) {
 export default function Room({ paused = false }: { paused?: boolean }) {
   const wallpaper = useTexture("/textures/wallpaper.jpg");
   const wood = useTexture("/textures/floor-wood.jpg");
+  const ceilingSeam = useTuningStore((s) => s.ceilingSeam);
+  const ceilingSeamFade = useTuningStore((s) => s.ceilingSeamFade);
+  const floorEdge = useTuningStore((s) => s.floorEdge);
+  const floorEdgeFade = useTuningStore((s) => s.floorEdgeFade);
+  const coveGlow = useTuningStore((s) => s.coveGlow);
+  const crownBright = useTuningStore((s) => s.crownBright);
 
   const wideWall = useMemo(() => tiledClone(wallpaper, W / TILE_W, H / TILE_H), [wallpaper]);
   const sideWall = useMemo(() => tiledClone(wallpaper, D / TILE_W, H / TILE_H), [wallpaper]);
@@ -49,40 +59,37 @@ export default function Room({ paused = false }: { paused?: boolean }) {
 
   return (
     <group>
-      {/* Floor — wood parquet */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, ROOM_CENTER_Z]} receiveShadow>
-        <planeGeometry args={[W, D]} />
-        <meshStandardMaterial map={floorTex} roughness={0.7} metalness={0} />
-      </mesh>
+      {/* Floor — wood parquet (lightbaked: holds the picture-light pool that spills
+          onto the floor below each work) */}
+      <BakedMesh id="floor" width={W} height={D} map={floorTex} roughness={0.7}
+        position={[0, 0, ROOM_CENTER_Z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow />
 
       {/* Celestial oculus ceiling: warm ivory ceiling with a big oval opening onto
           a living, swirling Van-Gogh sky, framed by a gilt ring; photographic
           crown moulding + warm cove. Animation freezes while inspecting. */}
-      <CelestialSalonCeiling roomWidth={W} roomDepth={D} ceilingY={H} centerZ={ROOM_CENTER_Z} paused={paused} />
+      <CelestialSalonCeiling roomWidth={W} roomDepth={D} ceilingY={H} centerZ={ROOM_CENTER_Z} paused={paused} coveLightOpacity={coveGlow} crownBright={crownBright} />
 
-      {/* Back wall (north) */}
-      <mesh position={[0, H / 2, BACK_Z]} receiveShadow>
-        <planeGeometry args={[W, H]} />
-        <meshStandardMaterial map={wideWall} roughness={0.85} />
-      </mesh>
+      {/* Walls — each lightbaked (unlit MeshBasic + baked lightMap once the baker runs).
+          The picture-light pools live in these lightmaps; the wallpaper stays crisp via
+          its own tiling map. */}
+      <BakedMesh id="wall-north" width={W} height={H} map={wideWall} position={[0, H / 2, BACK_Z]} receiveShadow />
+      <BakedMesh id="wall-south" width={W} height={H} map={wideWall} position={[0, H / 2, FRONT_Z]} rotation={[0, Math.PI, 0]} />
+      <BakedMesh id="wall-west" width={D} height={H} map={sideWall} position={[-HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, Math.PI / 2, 0]} receiveShadow />
+      <BakedMesh id="wall-east" width={D} height={H} map={sideWall} position={[HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, -Math.PI / 2, 0]} receiveShadow />
 
-      {/* Front wall (south) */}
-      <mesh position={[0, H / 2, FRONT_Z]} rotation={[0, Math.PI, 0]}>
-        <planeGeometry args={[W, H]} />
-        <meshStandardMaterial map={wideWall} roughness={0.85} />
-      </mesh>
-
-      {/* Left wall (west) */}
-      <mesh position={[-HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[D, H]} />
-        <meshStandardMaterial map={sideWall} roughness={0.85} />
-      </mesh>
-
-      {/* Right wall (east) */}
-      <mesh position={[HALF_W, H / 2, ROOM_CENTER_Z]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[D, H]} />
-        <meshStandardMaterial map={sideWall} roughness={0.85} />
-      </mesh>
+      {/* Static edge-shadow vignettes — the ceiling-cove + corner darkening N8AO used to
+          compute. One per wall, nudged a hair into the room so it multiplies over the
+          wallpaper. Tunable live via ?tune → "Wall shadows / 墙面阴影". */}
+      <WallShadow size={[W, H]} position={[0, H / 2, BACK_Z + 0.02]} />
+      <WallShadow size={[W, H]} position={[0, H / 2, FRONT_Z - 0.02]} rotation={[0, Math.PI, 0]} />
+      <WallShadow size={[D, H]} position={[-HALF_W + 0.02, H / 2, ROOM_CENTER_Z]} rotation={[0, Math.PI / 2, 0]} />
+      <WallShadow size={[D, H]} position={[HALF_W - 0.02, H / 2, ROOM_CENTER_Z]} rotation={[0, -Math.PI / 2, 0]} />
+      {/* AO in the seam where the crown decoration meets the ceiling — perimeter vignette
+          just under the ceiling (centre untouched so the sky oculus stays clear). */}
+      <PerimeterShadow size={[W, D]} position={[0, H - 0.02, ROOM_CENTER_Z]} rotation={[Math.PI / 2, 0, 0]} strength={ceilingSeam} fade={ceilingSeamFade} />
+      {/* AO where the floor meets the baseboards/walls — perimeter vignette just above the
+          floor (centre untouched so the rug is unaffected). */}
+      <PerimeterShadow size={[W, D]} position={[0, 0.015, ROOM_CENTER_Z]} rotation={[-Math.PI / 2, 0, 0]} strength={floorEdge} fade={floorEdgeFade} />
 
       {/* Baseboards — all four walls */}
       <mesh position={[0, 0.1, BACK_Z + 0.05]} receiveShadow><boxGeometry args={[W, 0.2, 0.1]} /><meshStandardMaterial color="#2e2014" roughness={0.7} /></mesh>
