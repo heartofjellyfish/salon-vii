@@ -31,6 +31,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# sliced handscroll assets (heavy; served from R2 in prod, regenerate via scripts/slice-scroll.mjs)
+/public/scrolls/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
